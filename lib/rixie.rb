@@ -41,5 +41,9 @@ module Rixie
     def reset!
       @config = Configuration.new
     end
+
+    def logger
+      config.logger
+    end
   end
 end

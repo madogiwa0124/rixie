@@ -10,6 +10,7 @@ module Minitest
   class Test
     def setup
       Rixie.reset!
+      Rixie.config.logger = Logger.new(IO::NULL)
     end
   end
 end

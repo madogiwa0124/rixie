@@ -20,17 +20,25 @@ module Rixie
       step_count = 0
 
       loop do
+        Rixie.logger.info { "[Agent] llm_call ##{step_count + 1}" }
         thought = llm_call(messages:)
 
         case thought.type
         when :tool_call
+          thought.tool_calls.each do |tc|
+            Rixie.logger.info { "[Agent] tool_call: #{tc.name}(#{tc.arguments})" }
+          end
           tool_results = @tool_executor.execute(thought.tool_calls)
+          tool_results.each do |r|
+            Rixie.logger.info { "[Agent] tool_result: #{r[:content].inspect}" }
+          end
           listener.emit(:step_completed, {tool_calls: thought.tool_calls, tool_results: tool_results})
           messages << {role: "assistant", content: nil, tool_calls: thought.tool_calls.map(&:to_llm_format)}
           tool_results.each { |r| messages << {role: "tool", tool_call_id: r[:tool_call_id], content: r[:content]} }
           step_count += 1
           raise MaxStepsExceededError, "Max steps (#{@max_steps}) exceeded" if step_count >= @max_steps
         when :finish
+          Rixie.logger.info { "[Agent] finish: #{thought.content.inspect}" }
           listener.emit(:finished, {content: thought.content})
           return thought.content
         end

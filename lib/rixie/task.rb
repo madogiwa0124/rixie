@@ -15,15 +15,18 @@ module Rixie
     end
 
     def execute
+      Rixie.logger.info { "[Task] started: #{@user_input.inspect}" }
       listener = EventListener.new
       listener.on(:step_completed) { |e| runs.last.add_step(**e) }
 
       result = @strategy.run(task: self, listener:)
       @output = result
       @status = "completed"
+      Rixie.logger.info { "[Task] completed" }
     rescue => e
       @status = "failed"
       @output = e.message
+      Rixie.logger.error { "[Task] failed: #{e.message}" }
       raise
     end
 
