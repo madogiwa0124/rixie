@@ -2,6 +2,11 @@
 
 A Ruby gem for AI agent orchestration. Provides autonomous execution of AI agents as a standalone gem (no Rails dependency).
 
+## Language Policy
+
+- **Conversation**: Match the user's language.
+- **Documents, commit messages, code comments**: Write in English unless the user explicitly requests otherwise.
+
 ## Development Commands
 
 ```bash
