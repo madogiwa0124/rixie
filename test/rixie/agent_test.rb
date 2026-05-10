@@ -30,7 +30,7 @@ class AgentTest < Minitest::Test
   end
 
   def make_client(responses)
-    Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: DummyAdapter.new(responses))
+    Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: Rixie::LLM::Adapter::Dummy.new(responses))
   end
 
   def make_agent(responses, tools: [], max_steps: 10)

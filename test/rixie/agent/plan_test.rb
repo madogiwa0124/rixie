@@ -27,7 +27,7 @@ class PlanTest < Minitest::Test
   end
 
   def make_agent(responses = [])
-    adapter = DummyAdapter.new(responses)
+    adapter = Rixie::LLM::Adapter::Dummy.new(responses)
     client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
     Rixie::Agent.new(instructions: "You are an assistant.", llm_client: client)
   end
@@ -44,7 +44,7 @@ class PlanTest < Minitest::Test
     agent = Rixie::Agent.new(
       instructions: "...",
       tools: [base_tool],
-      llm_client: Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: DummyAdapter.new([]))
+      llm_client: Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: Rixie::LLM::Adapter::Dummy.new([]))
     )
     plan = Rixie::Agent::Plan.new(base_agent: agent)
 

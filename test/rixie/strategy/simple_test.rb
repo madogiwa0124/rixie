@@ -9,7 +9,7 @@ class SimpleStrategyTest < Minitest::Test
   end
 
   def make_agent(responses)
-    adapter = DummyAdapter.new(responses)
+    adapter = Rixie::LLM::Adapter::Dummy.new(responses)
     client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
     Rixie::Agent.new(instructions: "Be helpful.", llm_client: client)
   end

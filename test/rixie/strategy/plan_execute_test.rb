@@ -32,7 +32,7 @@ class PlanExecuteTest < Minitest::Test
   end
 
   def make_agent(responses)
-    adapter = DummyAdapter.new(responses)
+    adapter = Rixie::LLM::Adapter::Dummy.new(responses)
     client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
     Rixie::Agent.new(instructions: "Be helpful.", llm_client: client)
   end
@@ -139,7 +139,7 @@ class PlanExecuteTest < Minitest::Test
   def test_extract_plan_raises_agent_error_when_plan_done_not_found
     strategy = Rixie::Strategy::PlanExecute.new
     # Build a run with no plan_done tool call in its steps
-    adapter = DummyAdapter.new([finish_response(content: "no plan here")])
+    adapter = Rixie::LLM::Adapter::Dummy.new([finish_response(content: "no plan here")])
     client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
     agent = Rixie::Agent.new(instructions: "s", llm_client: client)
     run = Rixie::Run.new(user_input: "x", agent: agent, context: [])

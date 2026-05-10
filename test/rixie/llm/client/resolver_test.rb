@@ -18,25 +18,25 @@ class ResolverTest < Minitest::Test
   def test_resolves_custom_provider_registered_via_config
     Rixie.configure do |config|
       config.register_provider("test_provider",
-        adapter: DummyAdapter,
+        adapter: Rixie::LLM::Adapter::Dummy,
         base_url: "http://localhost",
         api_key: "test")
     end
 
     adapter = Resolver.resolve(model: "test-model", provider: "test_provider")
-    assert_instance_of DummyAdapter, adapter
+    assert_instance_of Rixie::LLM::Adapter::Dummy, adapter
   end
 
   def test_custom_provider_takes_precedence_over_builtin
     Rixie.configure do |config|
       config.register_provider("openai",
-        adapter: DummyAdapter,
+        adapter: Rixie::LLM::Adapter::Dummy,
         base_url: "https://my-proxy.internal/v1",
         api_key: "custom")
     end
 
     adapter = Resolver.resolve(model: "gpt-4o", provider: "openai")
-    assert_instance_of DummyAdapter, adapter
+    assert_instance_of Rixie::LLM::Adapter::Dummy, adapter
   end
 
   def test_raises_no_provider_error_when_no_provider_and_no_default

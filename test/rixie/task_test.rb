@@ -24,7 +24,7 @@ class TaskTest < Minitest::Test
   end
 
   def make_agent(responses, tools: [])
-    adapter = DummyAdapter.new(responses)
+    adapter = Rixie::LLM::Adapter::Dummy.new(responses)
     client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
     Rixie::Agent.new(instructions: "Be helpful.", tools: tools, llm_client: client)
   end
@@ -46,7 +46,7 @@ class TaskTest < Minitest::Test
   end
 
   def test_execute_sets_status_to_failed_on_exception
-    adapter = DummyAdapter.new([])
+    adapter = Rixie::LLM::Adapter::Dummy.new([])
     client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
     agent = Rixie::Agent.new(instructions: "s", llm_client: client)
     task = make_task(agent)
@@ -55,7 +55,7 @@ class TaskTest < Minitest::Test
   end
 
   def test_execute_reraises_exception_on_failure
-    adapter = DummyAdapter.new([])
+    adapter = Rixie::LLM::Adapter::Dummy.new([])
     client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
     agent = Rixie::Agent.new(instructions: "s", llm_client: client)
     task = make_task(agent)
@@ -82,7 +82,7 @@ class TaskTest < Minitest::Test
   end
 
   def test_failed_returns_true_when_failed
-    adapter = DummyAdapter.new([])
+    adapter = Rixie::LLM::Adapter::Dummy.new([])
     client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
     task = make_task(Rixie::Agent.new(instructions: "s", llm_client: client))
     assert_raises(RuntimeError) { task.execute }
@@ -98,7 +98,7 @@ class TaskTest < Minitest::Test
   end
 
   def test_to_history_excludes_failed_runs
-    adapter = DummyAdapter.new([finish_response(content: "ok")])
+    adapter = Rixie::LLM::Adapter::Dummy.new([finish_response(content: "ok")])
     client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
     agent = Rixie::Agent.new(instructions: "s", llm_client: client)
     good_run = Rixie::Run.new(user_input: "Hello", agent: agent, context: [])

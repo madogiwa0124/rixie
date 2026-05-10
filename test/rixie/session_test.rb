@@ -9,7 +9,7 @@ class SessionTest < Minitest::Test
   end
 
   def make_client(responses)
-    adapter = DummyAdapter.new(responses)
+    adapter = Rixie::LLM::Adapter::Dummy.new(responses)
     Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
   end
 

@@ -24,7 +24,7 @@ class RunTest < Minitest::Test
   end
 
   def make_agent(responses, tools: [])
-    adapter = DummyAdapter.new(responses)
+    adapter = Rixie::LLM::Adapter::Dummy.new(responses)
     client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
     Rixie::Agent.new(instructions: "Be helpful.", tools: tools, llm_client: client)
   end
@@ -57,7 +57,7 @@ class RunTest < Minitest::Test
   end
 
   def test_execute_sets_status_to_failed_on_exception
-    adapter = DummyAdapter.new([])  # will raise when exhausted
+    adapter = Rixie::LLM::Adapter::Dummy.new([])  # will raise when exhausted
     client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
     agent = Rixie::Agent.new(instructions: "sys", llm_client: client)
     run = make_run(agent)
@@ -67,7 +67,7 @@ class RunTest < Minitest::Test
   end
 
   def test_execute_reraises_exception_on_failure
-    adapter = DummyAdapter.new([])
+    adapter = Rixie::LLM::Adapter::Dummy.new([])
     client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
     agent = Rixie::Agent.new(instructions: "sys", llm_client: client)
     run = make_run(agent)
@@ -90,7 +90,7 @@ class RunTest < Minitest::Test
   end
 
   def test_failed_returns_true_when_status_is_failed
-    adapter = DummyAdapter.new([])
+    adapter = Rixie::LLM::Adapter::Dummy.new([])
     client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
     run = make_run(Rixie::Agent.new(instructions: "s", llm_client: client))
     assert_raises(RuntimeError) { run.execute(listener: listener) }

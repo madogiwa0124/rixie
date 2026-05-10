@@ -7,7 +7,7 @@ class ClientTest < Minitest::Test
     super
     Rixie.configure do |config|
       config.register_provider("dummy",
-        adapter: DummyAdapter,
+        adapter: Rixie::LLM::Adapter::Dummy,
         base_url: "http://localhost",
         api_key: "test")
     end
@@ -18,7 +18,7 @@ class ClientTest < Minitest::Test
       raw: {"choices" => [{"message" => {"content" => "Hello!", "tool_calls" => nil}}]},
       provider: :openai
     )
-    dummy = DummyAdapter.new([finish_response])
+    dummy = Rixie::LLM::Adapter::Dummy.new([finish_response])
 
     Rixie.configure do |config|
       config.register_provider("injected",
@@ -48,7 +48,7 @@ class ClientTest < Minitest::Test
   end
 
   def test_dummy_adapter_raises_when_exhausted
-    dummy = DummyAdapter.new([])
+    dummy = Rixie::LLM::Adapter::Dummy.new([])
     assert_raises(RuntimeError) { dummy.chat([], tools: []) }
   end
 end
