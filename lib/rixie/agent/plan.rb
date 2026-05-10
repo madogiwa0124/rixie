@@ -23,7 +23,7 @@ module Rixie
           },
           required: ["steps"]
         },
-        call: ->(args) { args }
+        call: ->(_args) { "Planning complete." }
       )
 
       DEFAULT_PLANNING_INSTRUCTIONS = <<~INSTRUCTIONS

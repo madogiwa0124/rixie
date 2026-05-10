@@ -4,7 +4,7 @@ require "logger"
 
 module Rixie
   class Configuration
-    attr_accessor :default_provider, :default_model, :default_max_steps, :store, :logger, :log_level
+    attr_accessor :default_provider, :default_model, :default_max_steps, :store, :logger, :log_level, :request_timeout
 
     def initialize
       @default_provider = nil
@@ -13,6 +13,7 @@ module Rixie
       @store = nil
       @logger = Logger.new($stdout)
       @log_level = :info
+      @request_timeout = nil
       @custom_providers = {}
     end
 

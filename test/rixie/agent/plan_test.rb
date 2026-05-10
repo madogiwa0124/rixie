@@ -76,9 +76,8 @@ class PlanTest < Minitest::Test
     assert_equal "plan_done", Rixie::Agent::Plan::PLAN_DONE_TOOL.name
   end
 
-  def test_plan_done_tool_call_returns_arguments_as_is
-    args = {"steps" => [{"title" => "Step 1", "description" => "Do it"}]}
-    result = Rixie::Agent::Plan::PLAN_DONE_TOOL.call(args)
-    assert_equal args, result
+  def test_plan_done_tool_call_returns_planning_complete
+    result = Rixie::Agent::Plan::PLAN_DONE_TOOL.call({"steps" => []})
+    assert_equal "Planning complete.", result
   end
 end

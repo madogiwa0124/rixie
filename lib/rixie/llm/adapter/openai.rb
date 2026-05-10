@@ -10,9 +10,11 @@ module Rixie
   module LLM
     module Adapter
       class OpenAI
-        def initialize(model:, base_url:, api_key:)
+        def initialize(model:, base_url:, api_key:, request_timeout: nil)
           @model = model
-          @client = ::OpenAI::Client.new(access_token: api_key, uri_base: base_url)
+          params = {access_token: api_key, uri_base: base_url}
+          params[:request_timeout] = request_timeout if request_timeout
+          @client = ::OpenAI::Client.new(**params)
         end
 
         def chat(messages, tools:)

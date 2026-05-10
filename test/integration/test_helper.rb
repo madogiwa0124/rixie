@@ -26,6 +26,8 @@ module Integration
     # openai adapter, which works with any OpenAI-compatible endpoint (Ollama, etc.).
     # RIXIE_TEST_API_KEY defaults to "ollama" (Ollama ignores the key).
     def build_client(responses: [])
+      timeout = ENV["RIXIE_TEST_REQUEST_TIMEOUT"]&.to_i
+
       if ENV.key?("RIXIE_TEST_BASE_URL")
         Rixie.configure do |c|
           c.register_provider("custom",
@@ -33,9 +35,9 @@ module Integration
             base_url: ENV["RIXIE_TEST_BASE_URL"],
             api_key: ENV.fetch("RIXIE_TEST_API_KEY", "ollama"))
         end
-        Rixie::LLM::Client.new(provider: "custom", model: ENV["RIXIE_TEST_MODEL"])
+        Rixie::LLM::Client.new(provider: "custom", model: ENV["RIXIE_TEST_MODEL"], request_timeout: timeout)
       elsif ENV.key?("RIXIE_TEST_PROVIDER")
-        Rixie::LLM::Client.new(provider: ENV["RIXIE_TEST_PROVIDER"], model: ENV["RIXIE_TEST_MODEL"])
+        Rixie::LLM::Client.new(provider: ENV["RIXIE_TEST_PROVIDER"], model: ENV["RIXIE_TEST_MODEL"], request_timeout: timeout)
       else
         Rixie::LLM::Client.new(adapter: Rixie::LLM::Adapter::Dummy.new(responses))
       end

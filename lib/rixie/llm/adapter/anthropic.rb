@@ -10,7 +10,7 @@ module Rixie
   module LLM
     module Adapter
       class Anthropic
-        def initialize(model:, base_url:, api_key:)
+        def initialize(model:, base_url:, api_key:, request_timeout: nil)
           @model = model
           @client = ::Anthropic::Client.new(access_token: api_key)
         end

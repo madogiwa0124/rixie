@@ -6,14 +6,15 @@ module Rixie
   class Session
     attr_reader :agent, :tasks, :session_id
 
-    def initialize(agent: nil, instructions: nil, tools: [], model: nil, provider: nil, max_steps: nil, llm_client: nil, store: nil, initial_context: [])
+    def initialize(agent: nil, instructions: nil, tools: [], model: nil, provider: nil, max_steps: nil, llm_client: nil, store: nil, initial_context: [], request_timeout: nil)
       @agent = agent || Agent.new(
         instructions: instructions,
         tools: tools,
         max_steps: max_steps || Rixie.config.default_max_steps,
         llm_client: llm_client || LLM::Client.new(
           model: model || Rixie.config.default_model,
-          provider: provider || Rixie.config.default_provider
+          provider: provider || Rixie.config.default_provider,
+          request_timeout: request_timeout || Rixie.config.request_timeout
         )
       )
       @store = store || Rixie.config.store || Store::Memory.new

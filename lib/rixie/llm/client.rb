@@ -5,8 +5,8 @@ require_relative "client/resolver"
 module Rixie
   module LLM
     class Client
-      def initialize(model: nil, provider: nil, adapter: nil)
-        @adapter = adapter || Client::Resolver.resolve(model: model, provider: provider)
+      def initialize(model: nil, provider: nil, adapter: nil, request_timeout: nil)
+        @adapter = adapter || Client::Resolver.resolve(model: model, provider: provider, request_timeout: request_timeout)
       end
 
       def chat(messages, tools:)
