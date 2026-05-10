@@ -4,7 +4,7 @@ module Rixie
   class Task
     attr_reader :user_input, :agent, :context, :strategy, :runs, :status, :output
 
-    def initialize(user_input:, agent:, context:, strategy:)
+    def initialize(user_input:, agent:, context:, strategy:, silent: false)
       @user_input = user_input
       @agent = agent
       @context = context
@@ -12,21 +12,22 @@ module Rixie
       @runs = []
       @status = "running"
       @output = nil
+      @silent = silent
     end
 
     def execute
-      Rixie.logger.info { "[Task] started: #{@user_input.inspect}" }
+      Rixie.logger.info { "[Task] started: #{@user_input.inspect}" } unless @silent
       listener = EventListener.new
       listener.on(:step_completed) { |e| runs.last.add_step(**e) }
 
       result = @strategy.run(task: self, listener:)
       @output = result
       @status = "completed"
-      Rixie.logger.info { "[Task] completed" }
+      Rixie.logger.info { "[Task] completed" } unless @silent
     rescue => e
       @status = "failed"
       @output = e.message
-      Rixie.logger.error { "[Task] failed: #{e.message}" }
+      Rixie.logger.error { "[Task] failed: #{e.message}" } unless @silent
       raise
     end
 

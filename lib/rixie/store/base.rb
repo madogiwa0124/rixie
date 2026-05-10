@@ -18,6 +18,20 @@ module Rixie
       def load(session_id)
         raise Rixie::NotImplementedError, "#{self.class}#load is not implemented"
       end
+
+      # Serializes context for storage.
+      # @param context [Array<Context::History, Context::Summary>]
+      # @return [Array<Hash>]
+      def serialize(context)
+        raise Rixie::NotImplementedError, "#{self.class}#serialize is not implemented"
+      end
+
+      # Deserializes a single stored entry.
+      # @param entry [Hash] with a "type" key ("summary" or "history")
+      # @return [Context::History, Context::Summary]
+      def self.deserialize(entry)
+        raise Rixie::NotImplementedError, "#{self}.deserialize is not implemented"
+      end
     end
   end
 end

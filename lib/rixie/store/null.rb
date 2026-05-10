@@ -10,6 +10,10 @@ module Rixie
       def load(session_id)
         []
       end
+
+      def self.deserialize(entry)
+        []
+      end
     end
   end
 end

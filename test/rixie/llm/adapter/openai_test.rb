@@ -20,7 +20,10 @@ class OpenAIAdapterTest < Minitest::Test
   def stub_client(adapter)
     captured = nil
     fake_completions = Object.new
-    fake_completions.define_singleton_method(:create) { |**params| captured = params; EMPTY_RESULT }
+    fake_completions.define_singleton_method(:create) { |**params|
+      captured = params
+      EMPTY_RESULT
+    }
     fake_chat = Object.new
     fake_chat.define_singleton_method(:completions) { fake_completions }
     adapter.instance_variable_get(:@client).define_singleton_method(:chat) { fake_chat }

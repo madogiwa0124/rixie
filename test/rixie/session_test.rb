@@ -127,4 +127,117 @@ class SessionTest < Minitest::Test
   ensure
     Rixie.reset!
   end
+
+  # compress! tests
+
+  def test_compress_replaces_context_with_summary
+    session = make_session([finish_response(content: "Turn 1"), finish_response(content: "Summary")])
+    session.chat("Hello")
+    session.compress!
+    assert_instance_of Rixie::Context::Summary, session.context.first
+  end
+
+  def test_compress_clears_tasks
+    session = make_session([finish_response(content: "Turn 1"), finish_response(content: "Summary")])
+    session.chat("Hello")
+    session.compress!
+    assert_equal [], session.tasks
+  end
+
+  def test_compress_with_keep_recent_preserves_last_entries
+    session = make_session([
+      finish_response(content: "Turn 1"),
+      finish_response(content: "Turn 2"),
+      finish_response(content: "Turn 3"),
+      finish_response(content: "Summary")
+    ])
+    session.chat("First")
+    session.chat("Second")
+    session.chat("Third")
+    session.compress!(keep_recent: 2)
+
+    ctx = session.context
+    recent = ctx.select { |e| e.is_a?(Rixie::Context::History) }
+    assert_equal 2, recent.size
+  end
+
+  def test_compress_with_keep_recent_summarizes_only_older_entries
+    session = make_session([
+      finish_response(content: "Turn 1"),
+      finish_response(content: "Turn 2"),
+      finish_response(content: "Turn 3"),
+      finish_response(content: "Summary of first turn")
+    ])
+    session.chat("First")
+    session.chat("Second")
+    session.chat("Third")
+    session.compress!(keep_recent: 2)
+
+    ctx = session.context
+    summary = ctx.find { |e| e.is_a?(Rixie::Context::Summary) }
+    assert_equal "Summary of first turn", summary.content
+  end
+
+  def test_compress_persists_updated_context_via_store
+    store = Rixie::Store::Memory.new
+    session = make_session([finish_response(content: "Turn 1"), finish_response(content: "Summary")], store: store)
+    session.chat("Hello")
+    session.compress!
+
+    session_id = session.instance_variable_get(:@session_id)
+    saved = store.load(session_id)
+    assert_instance_of Rixie::Context::Summary, saved.first
+  end
+
+  def test_compress_returns_early_when_context_is_empty
+    session = make_session([])
+    result = session.compress!
+    assert_nil result
+    assert_equal [], session.context
+  end
+
+  def test_compress_returns_early_when_to_compress_is_empty
+    session = make_session([finish_response(content: "Turn 1")])
+    session.chat("Hello")
+    # keep_recent >= context.size means nothing to compress
+    result = session.compress!(keep_recent: 5)
+    assert_nil result
+    assert_equal 1, session.context.size
+    assert_instance_of Rixie::Context::History, session.context.first
+  end
+
+  def test_context_size_returns_approximate_token_count
+    session = make_session([finish_response(content: "Hello world")])
+    session.chat("Hi")
+    size = session.context_size
+    assert_kind_of Integer, size
+    assert size > 0
+  end
+
+  def test_context_size_returns_zero_when_context_is_empty
+    session = make_session([])
+    assert_equal 0, session.context_size
+  end
+
+  def test_context_starts_with_summary_after_compress
+    session = make_session([finish_response(content: "Turn 1"), finish_response(content: "Summary")])
+    session.chat("Hello")
+    session.compress!
+    assert_instance_of Rixie::Context::Summary, session.context.first
+  end
+
+  def test_context_has_summary_then_recent_after_compress_with_keep_recent
+    session = make_session([
+      finish_response(content: "Turn 1"),
+      finish_response(content: "Turn 2"),
+      finish_response(content: "Summary")
+    ])
+    session.chat("First")
+    session.chat("Second")
+    session.compress!(keep_recent: 1)
+
+    ctx = session.context
+    assert_instance_of Rixie::Context::Summary, ctx.first
+    assert_instance_of Rixie::Context::History, ctx.last
+  end
 end

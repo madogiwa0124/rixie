@@ -25,6 +25,22 @@ module Rixie
         messages << {role: "assistant", content: @output}
         messages
       end
+
+      def to_store
+        {
+          "type" => "history",
+          "input" => @input,
+          "steps" => @steps.map { |s|
+            {
+              "tool_calls" => s[:tool_calls].map(&:to_llm_format),
+              "tool_results" => s[:tool_results].map { |r|
+                {"tool_call_id" => r[:tool_call_id], "content" => r[:content]}
+              }
+            }
+          },
+          "output" => @output
+        }
+      end
     end
   end
 end
