@@ -11,8 +11,8 @@ module Rixie
           }]
         }.freeze
 
-        def initialize(responses = nil)
-          @responses = responses&.dup
+        def initialize(responses = nil, **_)
+          @responses = responses.is_a?(Array) ? responses.dup : nil
         end
 
         def chat(messages, tools:)

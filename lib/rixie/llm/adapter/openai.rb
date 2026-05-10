@@ -10,8 +10,10 @@ module Rixie
   module LLM
     module Adapter
       class OpenAI
-        def initialize(model:, base_url:, api_key:, request_timeout: nil)
+        def initialize(model:, base_url:, api_key:, request_timeout: nil, max_tokens: nil, temperature: nil)
           @model = model
+          @max_tokens = max_tokens
+          @temperature = temperature
           params = {api_key: api_key, base_url: base_url}
           params[:timeout] = request_timeout if request_timeout
           @client = ::OpenAI::Client.new(**params)
@@ -20,6 +22,8 @@ module Rixie
         def chat(messages, tools:)
           params = {model: @model, messages: messages}
           params[:tools] = tools unless tools.empty?
+          params[:max_tokens] = @max_tokens if @max_tokens
+          params[:temperature] = @temperature unless @temperature.nil?
 
           result = @client.chat.completions.create(**params)
           Rixie::LLM::Response.new(raw: normalize(result))

@@ -17,7 +17,7 @@ module Rixie
           }
         }.freeze
 
-        def self.resolve(model: nil, provider: nil, request_timeout: nil)
+        def self.resolve(model: nil, provider: nil, request_timeout: nil, max_tokens: nil, temperature: nil)
           raise Rixie::NoProviderError, "No provider configured. Pass `provider:` or set Rixie.config.default_provider." if provider.nil?
 
           all_providers = BUILTIN_PROVIDERS.merge(Rixie.config.custom_providers)
@@ -31,7 +31,9 @@ module Rixie
             model: model,
             base_url: config[:base_url],
             api_key: api_key,
-            request_timeout: request_timeout
+            request_timeout: request_timeout,
+            max_tokens: max_tokens,
+            temperature: temperature
           )
         end
 

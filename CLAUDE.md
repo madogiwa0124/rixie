@@ -40,7 +40,7 @@ Task     × N → Session  # Entire conversation
 
 **Rixie::Agent::Plan** — Agent subtype for the planning phase. Wraps a `base_agent` and appends planning instructions. Owns `PLAN_DONE_TOOL` (a no-op tool) by default.
 
-**Rixie::Session** — Primary user-facing entry point. Resolves config defaults (`default_provider`, `default_model`, `default_max_steps`, `store`) and constructs `Agent` and `LLM::Client` internally. Accepts a pre-built `agent:` for advanced use cases. Manages the entire conversation and accumulates `Context::History` entries across Tasks. Failed Tasks are excluded from context.
+**Rixie::Session** — Primary user-facing entry point. Resolves config defaults (`default_provider`, `default_model`, `default_max_steps`, `default_max_tokens`, `default_temperature`, `store`) and constructs `Agent` and `LLM::Client` internally. Accepts a pre-built `agent:` for advanced use cases. Manages the entire conversation and accumulates `Context::History` entries across Tasks. Failed Tasks are excluded from context.
 
 **Rixie::Task** — Unit that accomplishes a single goal. Owns a strategy and manages a collection of Runs. Creates an `EventListener` and passes it to the strategy on execution.
 
@@ -117,8 +117,10 @@ Rixie::Error                      # base
 
 ```ruby
 Rixie.configure do |config|
-  config.default_provider = "anthropic"          # RIXIE_DEFAULT_PROVIDER
-  config.default_model    = "claude-opus-4-5"
+  config.default_provider    = "anthropic"        # RIXIE_DEFAULT_PROVIDER
+  config.default_model       = "claude-opus-4-5"
+  config.default_max_tokens  = nil
+  config.default_temperature = nil
   config.store     = Rixie::Store::Memory
   config.logger    = Logger.new($stdout)
   config.log_level = :info                       # RIXIE_LOG_LEVEL
