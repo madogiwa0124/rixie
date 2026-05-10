@@ -7,10 +7,6 @@ class PromptBuilderTest < Minitest::Test
     Rixie::PromptBuilder.new
   end
 
-  def tool_call(id: "c1", name: "search", args: {})
-    Rixie::Agent::ToolCall.new(id: id, name: name, arguments: args)
-  end
-
   def fake_context_entry(messages)
     obj = Object.new
     obj.define_singleton_method(:to_message) { messages }
@@ -18,56 +14,37 @@ class PromptBuilderTest < Minitest::Test
   end
 
   def test_system_message_is_always_first
-    messages = builder.build(user_input: "hi", instructions: "Be helpful.", context: [], steps: [])
+    messages = builder.build(user_input: "hi", instructions: "Be helpful.", context: [])
     assert_equal "system", messages.first[:role]
     assert_equal "Be helpful.", messages.first[:content]
   end
 
   def test_user_message_is_always_last
-    messages = builder.build(user_input: "hi", instructions: "sys", context: [], steps: [])
+    messages = builder.build(user_input: "hi", instructions: "sys", context: [])
     assert_equal "user", messages.last[:role]
     assert_equal "hi", messages.last[:content]
   end
 
   def test_builds_messages_in_correct_order
     ctx = fake_context_entry([{role: "user", content: "prev"}, {role: "assistant", content: "ans"}])
-    tc = tool_call
-    step = {tool_calls: [tc], tool_results: [{tool_call_id: "c1", content: "found"}]}
-    messages = builder.build(user_input: "now", instructions: "sys", context: [ctx], steps: [step])
+    messages = builder.build(user_input: "now", instructions: "sys", context: [ctx])
 
     roles = messages.map { |m| m[:role] }
-    assert_equal ["system", "user", "assistant", "assistant", "tool", "user"], roles
+    assert_equal ["system", "user", "assistant", "user"], roles
   end
 
   def test_context_entries_are_expanded_via_to_message
     ctx1 = fake_context_entry([{role: "user", content: "q1"}, {role: "assistant", content: "a1"}])
     ctx2 = fake_context_entry([{role: "user", content: "q2"}, {role: "assistant", content: "a2"}])
-    messages = builder.build(user_input: "q3", instructions: "sys", context: [ctx1, ctx2], steps: [])
+    messages = builder.build(user_input: "q3", instructions: "sys", context: [ctx1, ctx2])
     assert_equal "q1", messages[1][:content]
     assert_equal "a1", messages[2][:content]
     assert_equal "q2", messages[3][:content]
     assert_equal "a2", messages[4][:content]
   end
 
-  def test_steps_produce_assistant_and_tool_messages
-    tc = tool_call(id: "c1", name: "lookup")
-    step = {tool_calls: [tc], tool_results: [{tool_call_id: "c1", content: "result"}]}
-    messages = builder.build(user_input: "hi", instructions: "sys", context: [], steps: [step])
-
-    assistant_msg = messages[1]
-    tool_msg = messages[2]
-
-    assert_equal "assistant", assistant_msg[:role]
-    assert_nil assistant_msg[:content]
-    assert_equal 1, assistant_msg[:tool_calls].size
-
-    assert_equal "tool", tool_msg[:role]
-    assert_equal "c1", tool_msg[:tool_call_id]
-    assert_equal "result", tool_msg[:content]
-  end
-
-  def test_empty_steps_produces_no_step_messages
-    messages = builder.build(user_input: "hi", instructions: "sys", context: [], steps: [])
+  def test_no_context_produces_only_system_and_user_messages
+    messages = builder.build(user_input: "hi", instructions: "sys", context: [])
     assert_equal 2, messages.size
   end
 end

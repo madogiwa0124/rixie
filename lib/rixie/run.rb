@@ -17,8 +17,7 @@ module Rixie
       messages = PromptBuilder.new.build(
         user_input: user_input,
         instructions: agent.instructions,
-        context: context,
-        steps: steps
+        context: context
       )
 
       @output = agent.think(messages:, listener:)
