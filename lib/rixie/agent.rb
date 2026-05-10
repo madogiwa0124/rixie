@@ -51,6 +51,9 @@ module Rixie
 
     def llm_call(messages:)
       response = @llm_client.chat(messages, tools: @tool_executor.definitions)
+      if response.finish_reason == "length"
+        Rixie.logger.warn { "[Agent] LLM response truncated (finish_reason=length)" }
+      end
       if response.has_tool_calls?
         Thought.new(
           type: :tool_call,

@@ -19,8 +19,30 @@ module Rixie
           params = {model: @model, messages: messages, max_tokens: 4096}
           params[:tools] = tools unless tools.empty?
 
-          raw = @client.messages(parameters: params)
-          Rixie::LLM::Response.new(raw: raw, provider: :anthropic)
+          result = @client.messages(parameters: params)
+          Rixie::LLM::Response.new(raw: normalize(result))
+        rescue ::Anthropic::Errors::Error => e
+          raise Rixie::LLM::Error, e.message
+        end
+
+        private
+
+        def normalize(result)
+          blocks = result["content"] || []
+          tool_calls = blocks.select { |b| b["type"] == "tool_use" }.map do |tc|
+            {"id" => tc["id"], "function" => {"name" => tc["name"], "arguments" => JSON.generate(tc["input"] || {})}}
+          end
+          text_blocks = blocks.select { |b| b["type"] == "text" }.map { |b| b["text"] }
+          content = text_blocks.empty? ? nil : text_blocks.join
+
+          {
+            "choices" => [{
+              "message" => {
+                "content" => content,
+                "tool_calls" => tool_calls.empty? ? nil : tool_calls
+              }
+            }]
+          }
         end
       end
     end

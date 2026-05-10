@@ -3,30 +3,19 @@
 require "test_helper"
 
 class AgentTest < Minitest::Test
-  def finish_raw(content: "Done!")
+  def finish_response(content: "Done!")
     {"choices" => [{"message" => {"content" => content, "tool_calls" => nil}}]}
   end
 
-  def tool_call_raw(id:, name:, arguments: {})
+  def tool_call_response(id:, name:, arguments: {})
     {
       "choices" => [{
         "message" => {
           "content" => nil,
-          "tool_calls" => [{
-            "id" => id,
-            "function" => {"name" => name, "arguments" => arguments.to_json}
-          }]
+          "tool_calls" => [{"id" => id, "function" => {"name" => name, "arguments" => arguments.to_json}}]
         }
       }]
     }
-  end
-
-  def finish_response(content: "Done!")
-    Rixie::LLM::Response.new(raw: finish_raw(content: content), provider: :openai)
-  end
-
-  def tool_call_response(id:, name:, arguments: {})
-    Rixie::LLM::Response.new(raw: tool_call_raw(id: id, name: name, arguments: arguments), provider: :openai)
   end
 
   def make_client(responses)
@@ -133,5 +122,26 @@ class AgentTest < Minitest::Test
   def test_llm_call_is_private
     agent = make_agent([finish_response])
     assert_raises(NoMethodError) { agent.llm_call(messages: []) }
+  end
+
+  def test_think_logs_warning_when_response_is_truncated
+    log_output = StringIO.new
+    Rixie.config.logger = Logger.new(log_output)
+
+    truncated = {"choices" => [{"finish_reason" => "length", "message" => {"content" => "cut off...", "tool_calls" => nil}}]}
+    agent = make_agent([truncated])
+    agent.think(messages: [], listener: listener)
+
+    assert_match "finish_reason=length", log_output.string
+  end
+
+  def test_think_does_not_log_warning_for_normal_finish
+    log_output = StringIO.new
+    Rixie.config.logger = Logger.new(log_output)
+
+    agent = make_agent([finish_response])
+    agent.think(messages: [], listener: listener)
+
+    refute_match "finish_reason=length", log_output.string
   end
 end

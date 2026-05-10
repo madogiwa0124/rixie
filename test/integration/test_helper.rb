@@ -44,41 +44,32 @@ module Integration
     end
 
     def finish_response(content: "Done.")
-      raw = {"choices" => [{"message" => {"content" => content, "tool_calls" => nil}}]}
-      Rixie::LLM::Response.new(raw: raw, provider: :openai)
+      {"choices" => [{"message" => {"content" => content, "tool_calls" => nil}}]}
     end
 
     def tool_call_response(id:, name:, arguments: {})
-      raw = {
+      {
         "choices" => [{
           "message" => {
             "content" => nil,
-            "tool_calls" => [{
-              "id" => id,
-              "function" => {"name" => name, "arguments" => JSON.generate(arguments)}
-            }]
+            "tool_calls" => [{"id" => id, "function" => {"name" => name, "arguments" => JSON.generate(arguments)}}]
           }
         }]
       }
-      Rixie::LLM::Response.new(raw: raw, provider: :openai)
     end
 
     def plan_done_response(steps:)
-      raw = {
+      {
         "choices" => [{
           "message" => {
             "content" => nil,
             "tool_calls" => [{
               "id" => "tc_plan",
-              "function" => {
-                "name" => "plan_done",
-                "arguments" => JSON.generate({"steps" => steps})
-              }
+              "function" => {"name" => "plan_done", "arguments" => JSON.generate({"steps" => steps})}
             }]
           }
         }]
       }
-      Rixie::LLM::Response.new(raw: raw, provider: :openai)
     end
   end
 

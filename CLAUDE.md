@@ -110,7 +110,7 @@ Rixie::Error                      # base
   │    └─ UnknownProviderError
   ├─ Rixie::AgentError
   │    └─ MaxStepsExceededError
-  └─ Rixie::LLMError
+  └─ Rixie::LLM::Error
 ```
 
 ## Configuration

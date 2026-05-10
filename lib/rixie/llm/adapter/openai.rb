@@ -3,7 +3,7 @@
 begin
   require "openai"
 rescue LoadError
-  raise Rixie::ConfigurationError, "ruby-openai gem is required. Add `gem 'ruby-openai'` to your Gemfile."
+  raise Rixie::ConfigurationError, "openai gem is required. Add `gem 'openai'` to your Gemfile."
 end
 
 module Rixie
@@ -12,8 +12,8 @@ module Rixie
       class OpenAI
         def initialize(model:, base_url:, api_key:, request_timeout: nil)
           @model = model
-          params = {access_token: api_key, uri_base: base_url}
-          params[:request_timeout] = request_timeout if request_timeout
+          params = {api_key: api_key, base_url: base_url}
+          params[:timeout] = request_timeout if request_timeout
           @client = ::OpenAI::Client.new(**params)
         end
 
@@ -21,8 +21,31 @@ module Rixie
           params = {model: @model, messages: messages}
           params[:tools] = tools unless tools.empty?
 
-          raw = @client.chat(parameters: params)
-          Rixie::LLM::Response.new(raw: raw, provider: :openai)
+          result = @client.chat.completions.create(**params)
+          Rixie::LLM::Response.new(raw: normalize(result))
+        rescue ::OpenAI::Errors::Error => e
+          raise Rixie::LLM::Error, e.message
+        end
+
+        private
+
+        def normalize(result)
+          {
+            "choices" => (result.choices || []).map do |choice|
+              message = choice.message
+              {
+                "message" => {
+                  "content" => message.content,
+                  "tool_calls" => message.tool_calls&.map do |tc|
+                    {
+                      "id" => tc.id,
+                      "function" => {"name" => tc.function.name, "arguments" => tc.function.arguments}
+                    }
+                  end
+                }
+              }
+            end
+          }
         end
       end
     end

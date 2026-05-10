@@ -4,7 +4,7 @@ require "test_helper"
 
 class PlanTest < Minitest::Test
   def plan_done_response
-    raw = {
+    {
       "choices" => [{
         "message" => {
           "content" => nil,
@@ -18,12 +18,10 @@ class PlanTest < Minitest::Test
         }
       }]
     }
-    Rixie::LLM::Response.new(raw: raw, provider: :openai)
   end
 
   def finish_response(content: "Done.")
-    raw = {"choices" => [{"message" => {"content" => content, "tool_calls" => nil}}]}
-    Rixie::LLM::Response.new(raw: raw, provider: :openai)
+    {"choices" => [{"message" => {"content" => content, "tool_calls" => nil}}]}
   end
 
   def make_agent(responses = [])

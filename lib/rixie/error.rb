@@ -13,7 +13,9 @@ module Rixie
   class MaxStepsExceededError < AgentError; end
   class ToolNotFoundError < AgentError; end
 
-  class LLMError < Error; end
+  module LLM
+    class Error < ::Rixie::Error; end
+  end
 
   module MCP
     class Error < ::Rixie::Error; end

@@ -14,11 +14,9 @@ class ClientTest < Minitest::Test
   end
 
   def test_chat_delegates_to_resolved_adapter
-    finish_response = Rixie::LLM::Response.new(
-      raw: {"choices" => [{"message" => {"content" => "Hello!", "tool_calls" => nil}}]},
-      provider: :openai
-    )
-    dummy = Rixie::LLM::Adapter::Dummy.new([finish_response])
+    dummy = Rixie::LLM::Adapter::Dummy.new([
+      {"choices" => [{"message" => {"content" => "Hello!", "tool_calls" => nil}}]}
+    ])
 
     Rixie.configure do |config|
       config.register_provider("injected",

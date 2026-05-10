@@ -12,4 +12,4 @@ gem "standard", "~> 1.3"
 
 gem "minitest", "~> 5.0"
 
-gem "ruby-openai", require: false
+gem "openai", require: false

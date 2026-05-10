@@ -4,8 +4,7 @@ require "test_helper"
 
 class SessionTest < Minitest::Test
   def finish_response(content: "Done!")
-    raw = {"choices" => [{"message" => {"content" => content, "tool_calls" => nil}}]}
-    Rixie::LLM::Response.new(raw: raw, provider: :openai)
+    {"choices" => [{"message" => {"content" => content, "tool_calls" => nil}}]}
   end
 
   def make_client(responses)

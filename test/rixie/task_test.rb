@@ -4,23 +4,18 @@ require "test_helper"
 
 class TaskTest < Minitest::Test
   def finish_response(content: "Done!")
-    raw = {"choices" => [{"message" => {"content" => content, "tool_calls" => nil}}]}
-    Rixie::LLM::Response.new(raw: raw, provider: :openai)
+    {"choices" => [{"message" => {"content" => content, "tool_calls" => nil}}]}
   end
 
   def tool_call_response(id:, name:, arguments: {})
-    raw = {
+    {
       "choices" => [{
         "message" => {
           "content" => nil,
-          "tool_calls" => [{
-            "id" => id,
-            "function" => {"name" => name, "arguments" => arguments.to_json}
-          }]
+          "tool_calls" => [{"id" => id, "function" => {"name" => name, "arguments" => arguments.to_json}}]
         }
       }]
     }
-    Rixie::LLM::Response.new(raw: raw, provider: :openai)
   end
 
   def make_agent(responses, tools: [])

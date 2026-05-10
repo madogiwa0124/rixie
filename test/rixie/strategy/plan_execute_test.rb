@@ -9,26 +9,21 @@ class PlanExecuteTest < Minitest::Test
   ]
 
   def finish_response(content: "Done.")
-    raw = {"choices" => [{"message" => {"content" => content, "tool_calls" => nil}}]}
-    Rixie::LLM::Response.new(raw: raw, provider: :openai)
+    {"choices" => [{"message" => {"content" => content, "tool_calls" => nil}}]}
   end
 
   def plan_done_response(steps: STEPS)
-    raw = {
+    {
       "choices" => [{
         "message" => {
           "content" => nil,
           "tool_calls" => [{
             "id" => "tc_plan",
-            "function" => {
-              "name" => "plan_done",
-              "arguments" => JSON.generate({"steps" => steps})
-            }
+            "function" => {"name" => "plan_done", "arguments" => JSON.generate({"steps" => steps})}
           }]
         }
       }]
     }
-    Rixie::LLM::Response.new(raw: raw, provider: :openai)
   end
 
   def make_agent(responses)

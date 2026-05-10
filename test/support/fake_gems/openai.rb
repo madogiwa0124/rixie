@@ -1,15 +1,31 @@
 # frozen_string_literal: true
 
-# Minimal stub of the ruby-openai gem for testing purposes.
+# Minimal stub of the openai gem for testing purposes.
 module OpenAI
+  module Errors
+    class Error < StandardError; end
+  end
+
   class Client
-    def initialize(access_token:, uri_base:)
-      @access_token = access_token
-      @uri_base = uri_base
+    def initialize(api_key:, base_url:, timeout: nil)
+      @api_key = api_key
+      @base_url = base_url
     end
 
-    def chat(parameters:)
-      {}
+    def chat
+      Chat.new
+    end
+
+    class Chat
+      def completions
+        Completions.new
+      end
+
+      class Completions
+        def create(**)
+          nil
+        end
+      end
     end
   end
 end
