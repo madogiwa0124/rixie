@@ -53,7 +53,8 @@ module Rixie
         @internal_agent ||= Agent.new(
           instructions: instructions,
           tools: tools,
-          llm_client: @base_agent.llm_client
+          llm_client: @base_agent.llm_client,
+          return_direct_tools: [PLAN_DONE_TOOL.name]
         )
       end
     end

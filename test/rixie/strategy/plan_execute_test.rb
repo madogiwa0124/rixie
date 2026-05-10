@@ -44,7 +44,6 @@ class PlanExecuteTest < Minitest::Test
   def full_responses(steps: STEPS)
     [
       plan_done_response(steps: steps),
-      finish_response(content: "Plan complete."),
       *steps.each_with_index.map { |_, i| finish_response(content: "Step #{i + 1} done.") }
     ]
   end

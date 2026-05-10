@@ -16,8 +16,7 @@ class PlanExecuteTest < Integration::TestCase
 
   def responses_for_full_flow
     [
-      plan_done_response(steps: STEPS),    # plan phase: plan_done tool call
-      finish_response(content: "Plan accepted."),  # plan phase: finish after plan_done
+      plan_done_response(steps: STEPS),               # plan phase: plan_done tool call
       finish_response(content: "Research complete."),  # execute step 1
       finish_response(content: "Summary written.")     # execute step 2
     ]

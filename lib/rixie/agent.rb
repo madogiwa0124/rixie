@@ -8,12 +8,13 @@ module Rixie
 
     attr_reader :instructions, :tools, :llm_client
 
-    def initialize(instructions:, llm_client:, tools: [], max_steps: nil)
+    def initialize(instructions:, llm_client:, tools: [], max_steps: nil, return_direct_tools: [])
       @instructions = instructions
       @tools = tools
       @max_steps = max_steps || DEFAULT_MAX_STEPS
       @tool_executor = ToolExecutor.new(tools: tools)
       @llm_client = llm_client
+      @return_direct_tools = return_direct_tools.to_set
     end
 
     def think(messages:, listener:)
@@ -37,6 +38,7 @@ module Rixie
           tool_results.each { |r| messages << {role: "tool", tool_call_id: r[:tool_call_id], content: r[:content]} }
           step_count += 1
           raise MaxStepsExceededError, "Max steps (#{@max_steps}) exceeded" if step_count >= @max_steps
+          return nil if thought.tool_calls.any? { |tc| @return_direct_tools.include?(tc.name) }
         when :finish
           Rixie.logger.info { "[Agent] finish: #{thought.content.inspect}" }
           listener.emit(:finished, {content: thought.content})
