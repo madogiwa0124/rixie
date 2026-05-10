@@ -35,7 +35,7 @@ Task     × N → Session  # Entire conversation
 
 **Rixie::Agent::Plan** — Agent subtype for the planning phase. Wraps a `base_agent` and appends planning instructions. Owns `PLAN_DONE_TOOL` (a no-op tool) by default.
 
-**Rixie::Session** — Manages the entire conversation. Accumulates `Context::History` entries across Tasks. Failed Tasks are excluded from context.
+**Rixie::Session** — Primary user-facing entry point. Resolves config defaults (`default_provider`, `default_model`, `default_max_steps`, `store`) and constructs `Agent` and `LLM::Client` internally. Accepts a pre-built `agent:` for advanced use cases. Manages the entire conversation and accumulates `Context::History` entries across Tasks. Failed Tasks are excluded from context.
 
 **Rixie::Task** — Unit that accomplishes a single goal. Owns a strategy and manages a collection of Runs. Creates an `EventListener` and passes it to the strategy on execution.
 
@@ -61,7 +61,7 @@ Task     × N → Session  # Entire conversation
 
 **Rixie::LLM::Client** — HTTP communication. Resolves provider via `Client::Resolver` on initialization.
 
-**Rixie::LLM::Client::Resolver** — Maps `provider` string to an adapter instance. Resolution order: (1) explicit `provider` argument, (2) `Rixie.config.default_provider`, (3) raises `NoProviderError`.
+**Rixie::LLM::Client::Resolver** — Maps `provider` string to an adapter instance. Raises `NoProviderError` if `provider` is nil (resolution of `Rixie.config.default_provider` is Session's responsibility). Also merges `Rixie.config.custom_providers` into the provider registry.
 
 **Rixie::LLM::Adapter::OpenAI** — Wraps `ruby-openai` gem (optional dependency). Supports any OpenAI-compatible endpoint via `base_url` override.
 
@@ -75,8 +75,8 @@ Task     × N → Session  # Entire conversation
 
 ## Key Design Decisions
 
-**`model` and `provider` are separate arguments.**
-Some providers (e.g. GitHub Models) serve models whose names contain another provider's name (e.g. `"openai/gpt-4o"`). Conflating provider and model into a single string would break resolution in these cases.
+**`model` and `provider` are separate arguments in `Session` and `LLM::Client`.**
+Some providers (e.g. GitHub Models) serve models whose names contain another provider's name (e.g. `"openai/gpt-4o"`). Conflating provider and model into a single string would break resolution in these cases. `Agent` does not accept `model` or `provider` — it receives a pre-built `llm_client:` from `Session`.
 
 **Strategy lives on Task, not Agent.**
 Strategy determines how many Runs to execute for a goal. Placing it on Agent would conflate execution strategy with agent identity, and would clash semantically with `Agent::Plan`.
@@ -112,10 +112,11 @@ Rixie::Error                      # base
 
 ```ruby
 Rixie.configure do |config|
-  config.default_provider = "anthropic"   # RIXIE_DEFAULT_PROVIDER
+  config.default_provider = "anthropic"          # RIXIE_DEFAULT_PROVIDER
+  config.default_model    = "claude-opus-4-5"
   config.store     = Rixie::Store::Memory
   config.logger    = Logger.new($stdout)
-  config.log_level = :info                # RIXIE_LOG_LEVEL
+  config.log_level = :info                       # RIXIE_LOG_LEVEL
 
   config.register_provider("my_proxy",
     adapter:  :openai,
@@ -125,7 +126,7 @@ Rixie.configure do |config|
 end
 ```
 
-Built-in providers: `openai`, `github`, `ollama`, `anthropic`.
+Built-in providers: `openai`, `anthropic`. OpenAI-compatible endpoints (GitHub Models, Ollama, etc.) can be registered via `config.register_provider`.
 
 ## Testing Approach
 
@@ -149,62 +150,17 @@ end
 ## Directory Structure
 
 ```
-lib/
-  rixie.rb
-  rixie/
-    version.rb
-    configuration.rb
-    error.rb
-    agent.rb
-    agent/
-      tool_call.rb
-      thought.rb
-      plan.rb
-    session.rb
-    task.rb
-    run.rb
-    context/
-      history.rb
-      plan.rb
-    strategy/
-      simple.rb
-      plan_execute.rb
-      plan_execute/
-        plan.rb
-    tool_executor.rb
-    prompt_builder.rb
-    event_listener.rb
-    llm/
-      client.rb
-      client/
-        resolver.rb
-      adapter/
-        openai.rb
-        anthropic.rb
-    store/
-      base.rb
-      memory.rb
-      null.rb
-test/
-  test_helper.rb
-  support/
-    dummy_adapter.rb
-  rixie/
-    agent_test.rb
-    session_test.rb
-    task_test.rb
-    run_test.rb
-    context/
-      history_test.rb
-      plan_test.rb
-    strategy/
-      simple_test.rb
-      plan_execute_test.rb
-    tool_executor_test.rb
-    prompt_builder_test.rb
-    event_listener_test.rb
-    llm/
-      client_test.rb
-      client/
-        resolver_test.rb
+lib/rixie/
+  agent.rb, agent/          # Core domain object + Plan subtype, ToolCall
+  session.rb                # Primary entry point
+  task.rb, run.rb           # Execution units
+  context/                  # History, Plan — implement to_message
+  strategy/                 # Simple, PlanExecute
+  llm/                      # Client, Resolver, Adapter (OpenAI, Anthropic)
+  store/                    # Base, Memory, Null
+test/support/dummy_adapter.rb  # Inject fake LLM responses in tests
 ```
+
+## Design Rules
+
+@.claude/rules/configuration.md
