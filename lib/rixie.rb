@@ -23,6 +23,7 @@ require_relative "rixie/strategy/simple"
 require_relative "rixie/strategy/plan_execute"
 require_relative "rixie/task"
 require_relative "rixie/session"
+require_relative "rixie/mcp"
 
 module Rixie
   module LLM

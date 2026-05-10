@@ -14,4 +14,11 @@ module Rixie
   class ToolNotFoundError < AgentError; end
 
   class LLMError < Error; end
+
+  module MCP
+    class Error < ::Rixie::Error; end
+    class TimeoutError < Error; end
+    class ProtocolError < Error; end
+    class RequestError < Error; end
+  end
 end
