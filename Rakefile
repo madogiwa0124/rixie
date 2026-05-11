@@ -15,6 +15,11 @@ namespace :test do
     t.libs << "lib"
     t.test_files = FileList["test/integration/**/*_test.rb"]
   end
+
+  Rake::TestTask.new(:smoke) do |t|
+    t.libs << "lib"
+    t.test_files = FileList["test/integration/smoke_test.rb"]
+  end
 end
 
 task default: %i[standard test]
