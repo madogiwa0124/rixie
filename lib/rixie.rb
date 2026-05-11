@@ -3,6 +3,7 @@
 require_relative "rixie/version"
 require_relative "rixie/error"
 require_relative "rixie/configuration"
+require_relative "rixie/event"
 require_relative "rixie/event_listener"
 require_relative "rixie/agent/tool_call"
 require_relative "rixie/llm/response"

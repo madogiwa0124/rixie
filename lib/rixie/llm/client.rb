@@ -5,7 +5,12 @@ require_relative "client/resolver"
 module Rixie
   module LLM
     class Client
-      def initialize(model: nil, provider: nil, adapter: nil, request_timeout: nil, max_tokens: nil, temperature: nil)
+      attr_reader :model, :provider
+
+      def initialize(model: nil, provider: nil, adapter: nil, stream: false, request_timeout: nil, max_tokens: nil, temperature: nil)
+        @model = model
+        @provider = provider
+        @stream = stream
         @adapter = adapter || Client::Resolver.resolve(
           model: model,
           provider: provider,
@@ -15,9 +20,14 @@ module Rixie
         )
       end
 
-      def chat(messages, tools:)
-        @adapter.chat(messages, tools: tools)
+      def call(messages, tools:, &block)
+        if @stream
+          @adapter.stream(messages, tools: tools, &block)
+        else
+          @adapter.chat(messages, tools: tools)
+        end
       end
+
     end
   end
 end

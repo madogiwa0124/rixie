@@ -42,7 +42,7 @@ class CompressorTest < Minitest::Test
     compressor = Rixie::Agent::Compressor.new(base_agent: base_agent)
     listener = Rixie::EventListener.new
     finished_content = nil
-    listener.on(:finished) { |e| finished_content = e[:content] }
+    listener.on(Rixie::Event::Finished) { |e| finished_content = e.content }
     compressor.think(messages: [{role: "user", content: "history"}], listener: listener)
     assert_equal "Summary text", finished_content
   end

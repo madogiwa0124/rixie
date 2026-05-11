@@ -111,14 +111,14 @@ class RunTest < Minitest::Test
     run = make_run(agent)
 
     received = []
-    listener.on(:step_completed) do |p|
-      received << p
-      run.add_step(**p)
+    listener.on(Rixie::Event::StepCompleted) do |e|
+      received << e
+      run.add_step(tool_calls: e.tool_calls, tool_results: e.tool_results)
     end
     run.execute(listener: listener)
 
     assert_equal 1, received.size
-    assert_equal "search", received.first[:tool_calls].first.name
+    assert_equal "search", received.first.tool_calls.first.name
     assert_equal 1, run.steps.size
   end
 end

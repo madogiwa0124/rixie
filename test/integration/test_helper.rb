@@ -29,12 +29,7 @@ module Integration
       timeout = ENV["RIXIE_TEST_REQUEST_TIMEOUT"]&.to_i
 
       if ENV.key?("RIXIE_TEST_BASE_URL")
-        Rixie.configure do |c|
-          c.register_provider("custom",
-            adapter: :openai,
-            base_url: ENV["RIXIE_TEST_BASE_URL"],
-            api_key: ENV.fetch("RIXIE_TEST_API_KEY", "ollama"))
-        end
+        register_custom_provider
         Rixie::LLM::Client.new(provider: "custom", model: ENV["RIXIE_TEST_MODEL"], request_timeout: timeout)
       elsif ENV.key?("RIXIE_TEST_PROVIDER")
         Rixie::LLM::Client.new(provider: ENV["RIXIE_TEST_PROVIDER"], model: ENV["RIXIE_TEST_MODEL"], request_timeout: timeout)
@@ -56,6 +51,33 @@ module Integration
           }
         }]
       }
+    end
+
+    # Builds a streaming LLM client.
+    # In dummy mode, responses are served from the given array in order.
+    # In live mode, returns a real streaming client against the configured provider.
+    def build_stream_client(responses: [])
+      timeout = ENV["RIXIE_TEST_REQUEST_TIMEOUT"]&.to_i
+
+      if ENV.key?("RIXIE_TEST_BASE_URL")
+        register_custom_provider
+        Rixie::LLM::Client.new(provider: "custom", model: ENV["RIXIE_TEST_MODEL"], stream: true, request_timeout: timeout)
+      elsif ENV.key?("RIXIE_TEST_PROVIDER")
+        Rixie::LLM::Client.new(provider: ENV["RIXIE_TEST_PROVIDER"], model: ENV["RIXIE_TEST_MODEL"], stream: true, request_timeout: timeout)
+      else
+        Rixie::LLM::Client.new(adapter: Rixie::LLM::Adapter::Dummy.new(responses), stream: true)
+      end
+    end
+
+    private
+
+    def register_custom_provider
+      Rixie.configure do |c|
+        c.register_provider("custom",
+          adapter: :openai,
+          base_url: ENV["RIXIE_TEST_BASE_URL"],
+          api_key: ENV.fetch("RIXIE_TEST_API_KEY", "ollama"))
+      end
     end
 
     def plan_done_response(steps:)

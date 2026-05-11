@@ -25,6 +25,10 @@ module OpenAI
         def create(**)
           nil
         end
+
+        def stream_raw(**)
+          []
+        end
       end
     end
   end

@@ -223,3 +223,89 @@ puts session.chat("What's my name?")
 ```
 
 `Store::Memory` keeps history in memory. Implement `Rixie::Store::Base` (`#save`, `#load`) to persist to a database or cache.
+
+## Streaming
+
+`Session#live` returns a lazy `Enumerator` that yields typed event objects as the LLM generates its response. The task does not execute until you begin iterating.
+
+```ruby
+session = Rixie::Session.new(instructions: "You are a helpful assistant.")
+
+session.live("Tell me about Ruby.").each do |event|
+  case event
+  when Rixie::Event::Token
+    print event.delta   # each streamed text chunk
+    $stdout.flush
+  when Rixie::Event::StepCompleted
+    # emitted after each tool call round-trip
+    puts "\n[tool] #{event.tool_calls.map(&:name).join(", ")}"
+  when Rixie::Event::Finished
+    puts "\n[done] #{event.content}"
+  end
+end
+```
+
+### Event types
+
+| Class | Fields | Emitted when |
+| --- | --- | --- |
+| `Rixie::Event::Token` | `delta: String` | A text chunk arrives from the LLM |
+| `Rixie::Event::StepCompleted` | `tool_calls:`, `tool_results:` | The agent finishes one tool-call round-trip |
+| `Rixie::Event::Finished` | `content: String` | The agent produces its final answer |
+
+`Event::Finished#content` is the full concatenated response — the same string you would get from `session.chat`.
+
+### Streaming with tool use
+
+`live` supports tools the same way `chat` does. `Event::StepCompleted` is emitted after each tool call, before streaming continues.
+
+```ruby
+session = Rixie::Session.new(
+  instructions: "You are a weather assistant.",
+  tools: [weather_tool]
+)
+
+session.live("What's the weather in Tokyo?").each do |event|
+  case event
+  when Rixie::Event::Token         then print event.delta
+  when Rixie::Event::StepCompleted then puts "\n[called #{event.tool_calls.first.name}]"
+  when Rixie::Event::Finished      then puts "\n#{event.content}"
+  end
+end
+```
+
+### Collecting the full response
+
+If you only need the final text, convert to an array and find `Finished`:
+
+```ruby
+events  = session.live("Summarize Ruby in one sentence.").to_a
+output  = events.find { |e| e.is_a?(Rixie::Event::Finished) }.content
+```
+
+### Context and history
+
+`live` participates in the same context as `chat`. Tasks from both methods are accumulated and passed to subsequent calls.
+
+```ruby
+session.chat("My name is Alice.")
+session.live("What's my name?").each { |e| print e.delta if e.is_a?(Rixie::Event::Token) }
+# streams: "Your name is Alice."
+```
+
+### Using a custom stream client
+
+By default, `Session` creates a second streaming-enabled LLM client automatically from your configured `default_provider` and `default_model`. To use a different model or endpoint for streaming, pass `stream_client:` explicitly:
+
+```ruby
+stream_client = Rixie::LLM::Client.new(
+  provider: "anthropic",
+  model:    "claude-haiku-4-5",
+  stream:   true
+)
+
+session = Rixie::Session.new(
+  instructions:  "You are a helpful assistant.",
+  stream_client: stream_client
+)
+```

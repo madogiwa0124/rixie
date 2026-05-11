@@ -24,6 +24,14 @@ module Rixie
 
           Rixie::LLM::Response.new(raw: @responses.shift)
         end
+
+        def stream(messages, tools:, &block)
+          response = chat(messages, tools: tools)
+          if (content = response.content)
+            block.call(Rixie::Event::Token.new(delta: content))
+          end
+          response
+        end
       end
     end
   end

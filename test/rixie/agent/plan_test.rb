@@ -64,10 +64,10 @@ class PlanTest < Minitest::Test
     plan = Rixie::Agent::Plan.new(base_agent: agent)
     listener = Rixie::EventListener.new
     received = []
-    listener.on(:step_completed) { |p| received << p }
+    listener.on(Rixie::Event::StepCompleted) { |e| received << e }
     plan.think(messages: [], listener: listener)
     assert_equal 1, received.size
-    assert_equal "plan_done", received.first[:tool_calls].first.name
+    assert_equal "plan_done", received.first.tool_calls.first.name
   end
 
   def test_plan_done_tool_name_is_plan_done

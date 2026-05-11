@@ -7,13 +7,38 @@ class SessionTest < Minitest::Test
     {"choices" => [{"message" => {"content" => content, "tool_calls" => nil}}]}
   end
 
+  def tool_call_response(id:, name:, arguments: {})
+    {
+      "choices" => [{
+        "message" => {
+          "content" => nil,
+          "tool_calls" => [{"id" => id, "function" => {"name" => name, "arguments" => arguments.to_json}}]
+        }
+      }]
+    }
+  end
+
   def make_client(responses)
     adapter = Rixie::LLM::Adapter::Dummy.new(responses)
     Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
   end
 
+  def make_stream_client(responses)
+    adapter = Rixie::LLM::Adapter::Dummy.new(responses)
+    Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter, stream: true)
+  end
+
   def make_session(responses, **opts)
     Rixie::Session.new(instructions: "Be helpful.", llm_client: make_client(responses), **opts)
+  end
+
+  def make_session_with_live(chat_responses, stream_responses, **opts)
+    Rixie::Session.new(
+      instructions: "Be helpful.",
+      llm_client: make_client(chat_responses),
+      stream_client: make_stream_client(stream_responses),
+      **opts
+    )
   end
 
   def test_chat_creates_and_executes_task
@@ -239,5 +264,97 @@ class SessionTest < Minitest::Test
     ctx = session.context
     assert_instance_of Rixie::Context::Summary, ctx.first
     assert_instance_of Rixie::Context::History, ctx.last
+  end
+
+  # live tests
+
+  def test_live_returns_an_enumerator
+    session = make_session_with_live([], [finish_response(content: "Hello")])
+    result = session.live("hi")
+    assert_instance_of Enumerator, result
+  end
+
+  def test_live_yields_event_token_events
+    session = make_session_with_live([], [finish_response(content: "Hello")])
+    events = session.live("hi").to_a
+    tokens = events.select { |e| e.is_a?(Rixie::Event::Token) }
+    refute_empty tokens
+    assert_equal "Hello", tokens.map(&:delta).join
+  end
+
+  def test_live_yields_event_step_completed_events
+    tool = Rixie::Tool.new(name: "search", description: "desc", input_schema: {}, call: ->(_) { "found" })
+    session = Rixie::Session.new(
+      instructions: "Be helpful.",
+      tools: [tool],
+      llm_client: make_client([]),
+      stream_client: make_stream_client([
+        tool_call_response(id: "c1", name: "search"),
+        finish_response(content: "Done")
+      ])
+    )
+    events = session.live("hi").to_a
+    step_events = events.select { |e| e.is_a?(Rixie::Event::StepCompleted) }
+    assert_equal 1, step_events.size
+    assert_equal "search", step_events.first.tool_calls.first.name
+  end
+
+  def test_live_yields_event_finished_event
+    session = make_session_with_live([], [finish_response(content: "Final answer")])
+    events = session.live("hi").to_a
+    finished = events.select { |e| e.is_a?(Rixie::Event::Finished) }
+    assert_equal 1, finished.size
+    assert_equal "Final answer", finished.first.content
+  end
+
+  def test_live_appends_task_to_tasks_after_enumeration
+    session = make_session_with_live([], [finish_response])
+    enum = session.live("hi")
+    assert_equal 0, session.tasks.size
+    enum.to_a
+    assert_equal 1, session.tasks.size
+    assert session.tasks.first.completed?
+  end
+
+  def test_live_persists_context_via_store_after_enumeration
+    store = Rixie::Store::Memory.new
+    session = make_session_with_live([], [finish_response(content: "Stored")], store: store)
+    session.live("hi").to_a
+
+    session_id = session.instance_variable_get(:@session_id)
+    saved = store.load(session_id)
+    assert_equal 1, saved.size
+    assert_instance_of Rixie::Context::History, saved.first
+  end
+
+  def test_live_accepts_strategy_argument
+    session = make_session_with_live([], [finish_response])
+    result = session.live("hi", strategy: Rixie::Strategy::Simple.new).to_a
+    refute_empty result
+  end
+
+  def test_live_uses_stream_client_internally
+    stream_adapter = Rixie::LLM::Adapter::Dummy.new([finish_response(content: "from stream")])
+    stream_client = Rixie::LLM::Client.new(
+      model: "gpt-4o", provider: "openai",
+      adapter: stream_adapter, stream: true
+    )
+    session = Rixie::Session.new(
+      instructions: "Be helpful.",
+      llm_client: make_client([]),
+      stream_client: stream_client
+    )
+    events = session.live("hello").to_a
+    finished = events.find { |e| e.is_a?(Rixie::Event::Finished) }
+    assert_equal "from stream", finished.content
+  end
+
+  def test_live_does_not_execute_before_enumeration
+    session = make_session_with_live([], [finish_response])
+    enum = session.live("hi")
+    # Task hasn't run yet
+    assert_equal 0, session.tasks.size
+    enum.to_a
+    assert_equal 1, session.tasks.size
   end
 end

@@ -18,16 +18,16 @@ class AgentTest < Minitest::Test
     }
   end
 
-  def make_client(responses)
-    Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: Rixie::LLM::Adapter::Dummy.new(responses))
+  def make_client(responses, stream: false)
+    Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", stream: stream, adapter: Rixie::LLM::Adapter::Dummy.new(responses))
   end
 
-  def make_agent(responses, tools: [], max_steps: 10)
+  def make_agent(responses, tools: [], max_steps: 10, stream: false)
     Rixie::Agent.new(
       instructions: "Be helpful.",
       tools: tools,
       max_steps: max_steps,
-      llm_client: make_client(responses)
+      llm_client: make_client(responses, stream: stream)
     )
   end
 
@@ -66,7 +66,7 @@ class AgentTest < Minitest::Test
 
   def test_think_emits_step_completed_with_tool_calls_and_tool_results
     received = nil
-    listener.on(:step_completed) { |p| received = p }
+    listener.on(Rixie::Event::StepCompleted) { |e| received = e }
 
     tool = simple_tool(name: "get_weather", result: "sunny")
     agent = make_agent(
@@ -76,19 +76,19 @@ class AgentTest < Minitest::Test
     agent.think(messages: [], listener: listener)
 
     refute_nil received
-    assert_equal 1, received[:tool_calls].size
-    assert_equal "get_weather", received[:tool_calls].first.name
-    assert_equal [{tool_call_id: "c1", content: "sunny"}], received[:tool_results]
+    assert_equal 1, received.tool_calls.size
+    assert_equal "get_weather", received.tool_calls.first.name
+    assert_equal [{tool_call_id: "c1", content: "sunny"}], received.tool_results
   end
 
   def test_think_emits_finished_with_content
     received = nil
-    listener.on(:finished) { |p| received = p }
+    listener.on(Rixie::Event::Finished) { |e| received = e }
 
     agent = make_agent([finish_response(content: "All done")])
     agent.think(messages: [], listener: listener)
 
-    assert_equal({content: "All done"}, received)
+    assert_equal "All done", received.content
   end
 
   def test_think_raises_max_steps_exceeded_when_step_count_reaches_max_steps
@@ -121,7 +121,7 @@ class AgentTest < Minitest::Test
 
   def test_llm_call_is_private
     agent = make_agent([finish_response])
-    assert_raises(NoMethodError) { agent.llm_call(messages: []) }
+    assert_raises(NoMethodError) { agent.llm_call(messages: [], listener: listener) }
   end
 
   def test_think_logs_warning_when_response_is_truncated
@@ -143,5 +143,28 @@ class AgentTest < Minitest::Test
     agent.think(messages: [], listener: listener)
 
     refute_match "finish_reason=length", log_output.string
+  end
+
+  def test_think_emits_event_token_when_stream_client_is_used
+    tokens = []
+    listener.on(Rixie::Event::Token) { |e| tokens << e.delta }
+
+    agent = make_agent([finish_response(content: "streamed!")], stream: true)
+    agent.think(messages: [], listener: listener)
+
+    assert_equal ["streamed!"], tokens
+  end
+
+  def test_with_llm_client_returns_new_agent_with_same_instructions_and_tools
+    tool = simple_tool
+    agent = make_agent([finish_response], tools: [tool])
+    new_client = make_client([finish_response(content: "new")])
+    new_agent = agent.with_llm_client(new_client)
+
+    assert_instance_of Rixie::Agent, new_agent
+    refute_same agent, new_agent
+    assert_equal agent.instructions, new_agent.instructions
+    assert_equal agent.tools, new_agent.tools
+    assert_same new_client, new_agent.llm_client
   end
 end
