@@ -93,7 +93,7 @@ class AnthropicAdapter
   end
 
   def stream(messages, tools:, &block)
-    # implement SSE streaming here if needed
+    # Falls back to non-streaming. Implement SSE if you need token-by-token output.
     chat(messages, tools: tools)
   end
 
@@ -129,7 +129,7 @@ session = Rixie::Session.new(
 Session          # manages the full conversation; accumulates history across chats
 └── Task         # accomplishes a single goal; owns a Strategy
     └── Run × N  # one LLM loop per step; calls Agent#think
-        └── Agent# thinks and acts: calls the LLM, executes tools, loops until done
+        └── Agent         # thinks and acts: calls the LLM, executes tools, loops until done
 ```
 
 | Class | Responsibility |
@@ -299,7 +299,7 @@ puts session.chat("What's my name?")
 
 ## Streaming
 
-`Session#live` returns a lazy `Enumerator` that yields typed event objects as the LLM generates its response. The task does not execute until you begin iterating.
+`Session#live` returns an `Enumerator` that yields typed event objects as the LLM generates its response.
 
 ```ruby
 session = Rixie::Session.new(instructions: "You are a helpful assistant.")
