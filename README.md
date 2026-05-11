@@ -62,6 +62,67 @@ Rixie.configure do |config|
 end
 ```
 
+### Custom adapters
+
+You can plug in any LLM by writing an adapter class and registering it as a provider. An adapter must implement two methods:
+
+```ruby
+def chat(messages, tools:)   # → Rixie::LLM::Response
+def stream(messages, tools:, &block)  # yields Event::Token objects, → Rixie::LLM::Response
+```
+
+For example, to add Anthropic support using the [`anthropic`](https://github.com/anthropics/anthropic-sdk-ruby) gem:
+
+```ruby
+require "anthropic"
+
+class AnthropicAdapter
+  DEFAULT_MAX_TOKENS = 4096
+
+  def initialize(model:, api_key:, max_tokens: nil, **)
+    @model      = model
+    @max_tokens = max_tokens || DEFAULT_MAX_TOKENS
+    @client     = Anthropic::Client.new(access_token: api_key)
+  end
+
+  def chat(messages, tools:)
+    params = {model: @model, messages: messages, max_tokens: @max_tokens}
+    params[:tools] = tools unless tools.empty?
+    result = @client.messages(parameters: params)
+    Rixie::LLM::Response.new(raw: normalize(result))
+  end
+
+  def stream(messages, tools:, &block)
+    # implement SSE streaming here if needed
+    chat(messages, tools: tools)
+  end
+
+  private
+
+  def normalize(result)
+    blocks     = result["content"] || []
+    tool_calls = blocks.select { |b| b["type"] == "tool_use" }.map do |tc|
+      {"id" => tc["id"], "function" => {"name" => tc["name"], "arguments" => tc["input"].to_json}}
+    end
+    content = blocks.find { |b| b["type"] == "text" }&.fetch("text", nil)
+    {"choices" => [{"message" => {"content" => content, "tool_calls" => tool_calls.empty? ? nil : tool_calls}}]}
+  end
+end
+
+Rixie.configure do |config|
+  config.register_provider("anthropic",
+    adapter: AnthropicAdapter,
+    api_key: ENV["ANTHROPIC_API_KEY"]
+  )
+end
+
+session = Rixie::Session.new(
+  instructions: "You are a helpful assistant.",
+  provider:     "anthropic",
+  model:        "claude-opus-4-5"
+)
+```
+
 ## Quick Start
 
 ```ruby
