@@ -111,9 +111,9 @@ class OpenAIAdapterTest < Minitest::Test
   def test_stream_accumulates_tool_call_deltas_correctly
     adapter = build_adapter
     chunks = [
-      make_chunk(tool_calls: [{index: 0, id: "c1",  name: "get_w",   arguments: ""}]),
-      make_chunk(tool_calls: [{index: 0, id: "",     name: "eather",  arguments: "{\"city\""}]),
-      make_chunk(tool_calls: [{index: 0, id: "",     name: "",        arguments: ": \"Tokyo\"}"}])
+      make_chunk(tool_calls: [{index: 0, id: "c1", name: "get_w", arguments: ""}]),
+      make_chunk(tool_calls: [{index: 0, id: "", name: "eather", arguments: "{\"city\""}]),
+      make_chunk(tool_calls: [{index: 0, id: "", name: "", arguments: ": \"Tokyo\"}"}])
     ]
     stub_stream_client(adapter, chunks: chunks)
 

@@ -61,15 +61,15 @@ module Rixie
         stream_agent = @agent.with_llm_client(@stream_client)
 
         listener = EventListener.new
-        listener.on(Event::Token)         { |e| yielder << e }
+        listener.on(Event::Token) { |e| yielder << e }
         listener.on(Event::StepCompleted) { |e| yielder << e }
-        listener.on(Event::Finished)      { |e| yielder << e }
+        listener.on(Event::Finished) { |e| yielder << e }
 
         task = Task.new(
           user_input: user_input,
-          agent:      stream_agent,
-          context:    context,
-          strategy:   strategy
+          agent: stream_agent,
+          context: context,
+          strategy: strategy
         )
         task.execute(listener:)
         @tasks << task

@@ -31,7 +31,7 @@ class ClientTest < Minitest::Test
 
   def test_call_uses_adapter_stream_when_stream_is_true
     client = make_dummy_client([finish_response(content: "streamed")], stream: true)
-    result = client.call([], tools: []) { }
+    result = client.call([], tools: []) {}
     assert_equal "streamed", result.content
   end
 

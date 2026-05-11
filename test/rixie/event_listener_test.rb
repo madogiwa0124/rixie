@@ -35,7 +35,7 @@ class EventListenerTest < Minitest::Test
   def test_different_event_classes_dispatched_independently
     token_calls = []
     finished_calls = []
-    @listener.on(Rixie::Event::Token)    { |e| token_calls << e.delta }
+    @listener.on(Rixie::Event::Token) { |e| token_calls << e.delta }
     @listener.on(Rixie::Event::Finished) { |e| finished_calls << e.content }
 
     @listener.emit(Rixie::Event::Token.new(delta: "hello"))

@@ -44,11 +44,11 @@ module Rixie
             delta.tool_calls&.each do |tc|
               i = tc.index
               accumulated_tool_calls[i] ||= {
-                "id"       => +"",
+                "id" => +"",
                 "function" => {"name" => +"", "arguments" => +""}
               }
-              accumulated_tool_calls[i]["id"]                    << tc.id.to_s
-              accumulated_tool_calls[i]["function"]["name"]      << tc.function&.name.to_s
+              accumulated_tool_calls[i]["id"] << tc.id.to_s
+              accumulated_tool_calls[i]["function"]["name"] << tc.function&.name.to_s
               accumulated_tool_calls[i]["function"]["arguments"] << tc.function&.arguments.to_s
             end
           end
@@ -65,7 +65,7 @@ module Rixie
           raw = {
             "choices" => [{
               "message" => {
-                "content"    => content.empty? ? nil : content,
+                "content" => content.empty? ? nil : content,
                 "tool_calls" => tool_calls
               }
             }]

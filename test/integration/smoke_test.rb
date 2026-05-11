@@ -72,8 +72,8 @@ class SmokeTest < Integration::TestCase
     )
 
     events = session.live("Say hello.").to_a
-    tokens   = events.select { |e| e.is_a?(Rixie::Event::Token) }
-    finished = events.find   { |e| e.is_a?(Rixie::Event::Finished) }
+    tokens = events.select { |e| e.is_a?(Rixie::Event::Token) }
+    finished = events.find { |e| e.is_a?(Rixie::Event::Finished) }
 
     assert_instance_of Rixie::Event::Finished, finished
     refute_empty finished.content

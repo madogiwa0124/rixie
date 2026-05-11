@@ -27,7 +27,6 @@ module Rixie
           @adapter.chat(messages, tools: tools)
         end
       end
-
     end
   end
 end
