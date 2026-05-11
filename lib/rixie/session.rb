@@ -77,7 +77,7 @@ module Rixie
       end
     end
 
-    def compress!(keep_recent: 0)
+    def compress!(keep_recent: 0, compressor: nil)
       return if context.empty?
 
       recent = context.last(keep_recent)
@@ -90,7 +90,7 @@ module Rixie
       Rixie.logger.info { "[Session] compressing #{to_compress.size} context entries (keep_recent: #{keep_recent})" }
       task = Task.new(
         user_input: summary_input,
-        agent: Agent::Compressor.new(base_agent: @agent),
+        agent: compressor || Agent::Compressor.new(base_agent: @agent),
         context: [],
         strategy: Strategy::Simple.new,
         silent: true

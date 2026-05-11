@@ -214,6 +214,18 @@ class SessionTest < Minitest::Test
     assert_instance_of Rixie::Context::Summary, saved.first
   end
 
+  def test_compress_accepts_custom_compressor
+    custom_instructions = "Summarize in one word."
+    session = make_session([finish_response(content: "Turn 1"), finish_response(content: "OneWord")])
+    session.chat("Hello")
+    compressor = Rixie::Agent::Compressor.new(
+      base_agent: session.agent,
+      summarization_instructions: custom_instructions
+    )
+    session.compress!(compressor: compressor)
+    assert_equal "OneWord", session.context.first.content
+  end
+
   def test_compress_returns_early_when_context_is_empty
     session = make_session([])
     result = session.compress!
