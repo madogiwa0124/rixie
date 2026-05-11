@@ -9,11 +9,6 @@ module Rixie
             adapter: :openai,
             base_url: "https://api.openai.com/v1",
             api_key: -> { ENV["OPENAI_API_KEY"] }
-          },
-          "anthropic" => {
-            adapter: :anthropic,
-            base_url: "https://api.anthropic.com",
-            api_key: -> { ENV["ANTHROPIC_API_KEY"] }
           }
         }.freeze
 
@@ -42,9 +37,6 @@ module Rixie
           when :openai
             require_relative "../adapter/openai"
             Adapter::OpenAI
-          when :anthropic
-            require_relative "../adapter/anthropic"
-            Adapter::Anthropic
           when Class
             adapter
           else

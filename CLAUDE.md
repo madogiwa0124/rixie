@@ -70,8 +70,6 @@ Task     × N → Session  # Entire conversation
 
 **Rixie::LLM::Adapter::OpenAI** — Wraps `ruby-openai` gem (optional dependency). Supports any OpenAI-compatible endpoint via `base_url` override.
 
-**Rixie::LLM::Adapter::Anthropic** — Wraps `anthropic` gem (optional dependency).
-
 **Rixie::Store::Base** — Interface definition for storage adapters.
 
 **Rixie::Store::Memory** — In-memory store (default).
@@ -99,7 +97,7 @@ Scoping the listener to each Task prevents event cross-talk when multiple Sessio
 Using a tool call to signal plan completion avoids fragile text parsing, reuses the existing tool call loop, and sidesteps issues with combining `structured_output` and `tools` in the same request.
 
 **Optional dependencies with descriptive errors.**
-`ruby-openai` and `anthropic` are not runtime dependencies. Each adapter attempts `require` at load time and raises `Rixie::ConfigurationError` with an actionable message if the gem is missing.
+`ruby-openai` is not a runtime dependency. The adapter attempts `require` at load time and raises `Rixie::ConfigurationError` with an actionable message if the gem is missing.
 
 ## Error Classes
 
@@ -117,8 +115,8 @@ Rixie::Error                      # base
 
 ```ruby
 Rixie.configure do |config|
-  config.default_provider    = "anthropic"        # RIXIE_DEFAULT_PROVIDER
-  config.default_model       = "claude-opus-4-5"
+  config.default_provider    = "openai"           # RIXIE_DEFAULT_PROVIDER
+  config.default_model       = "gpt-4.1-mini"
   config.default_max_tokens  = nil
   config.default_temperature = nil
   config.store     = Rixie::Store::Memory
@@ -133,7 +131,7 @@ Rixie.configure do |config|
 end
 ```
 
-Built-in providers: `openai`, `anthropic`. OpenAI-compatible endpoints (GitHub Models, Ollama, etc.) can be registered via `config.register_provider`.
+Built-in provider: `openai`. OpenAI-compatible endpoints (GitHub Models, Ollama, etc.) can be registered via `config.register_provider`.
 
 ## Testing Approach
 

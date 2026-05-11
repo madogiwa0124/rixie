@@ -17,7 +17,6 @@ gem "rixie"
 
 # Also add the provider gem you need:
 gem "openai"       # for OpenAI, GitHub Models, Ollama, and other OpenAI-compatible endpoints
-gem "anthropic"    # for Anthropic
 ```
 
 ## Configuration
@@ -35,12 +34,11 @@ end
 
 ### Built-in providers
 
-Rixie has two built-in providers. API keys are read from environment variables.
+Rixie has one built-in provider. The API key is read from an environment variable.
 
-| Provider    | env var             |
-| ----------- | ------------------- |
-| `openai`    | `OPENAI_API_KEY`    |
-| `anthropic` | `ANTHROPIC_API_KEY` |
+| Provider | env var          |
+| -------- | ---------------- |
+| `openai` | `OPENAI_API_KEY` |
 
 ### OpenAI-compatible endpoints
 
@@ -187,10 +185,7 @@ session.chat("Research and write a report on Ruby 3.x features.",
 
 ```ruby
 # OpenAI
-session = Rixie::Session.new(instructions: "...", provider: "openai",    model: "gpt-4.1")
-
-# Anthropic
-session = Rixie::Session.new(instructions: "...", provider: "anthropic", model: "claude-opus-4-5")
+session = Rixie::Session.new(instructions: "...", provider: "openai", model: "gpt-4.1")
 
 # GitHub Models (registered as custom provider)
 session = Rixie::Session.new(instructions: "...", provider: "github",    model: "openai/gpt-4.1-mini")
@@ -299,8 +294,8 @@ By default, `Session` creates a second streaming-enabled LLM client automaticall
 
 ```ruby
 stream_client = Rixie::LLM::Client.new(
-  provider: "anthropic",
-  model:    "claude-haiku-4-5",
+  provider: "openai",
+  model:    "gpt-4.1-mini",
   stream:   true
 )
 

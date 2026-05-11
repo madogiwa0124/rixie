@@ -10,11 +10,6 @@ class ResolverTest < Minitest::Test
     assert_instance_of Rixie::LLM::Adapter::OpenAI, adapter
   end
 
-  def test_resolves_builtin_anthropic_provider
-    adapter = Resolver.resolve(model: "claude-3-5-sonnet-20241022", provider: "anthropic")
-    assert_instance_of Rixie::LLM::Adapter::Anthropic, adapter
-  end
-
   def test_resolves_custom_provider_registered_via_config
     Rixie.configure do |config|
       config.register_provider("test_provider",
