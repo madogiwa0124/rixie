@@ -123,6 +123,23 @@ session = Rixie::Session.new(
 )
 ```
 
+## Architecture
+
+```
+Session          # manages the full conversation; accumulates history across chats
+└── Task         # accomplishes a single goal; owns a Strategy
+    └── Run × N  # one LLM loop per step; calls Agent#think
+        └── Agent# thinks and acts: calls the LLM, executes tools, loops until done
+```
+
+| Class | Responsibility |
+| --- | --- |
+| `Session` | Entry point. Resolves config, creates `Agent` and `LLM::Client`, exposes `chat` and `live`. |
+| `Task` | Runs a `Strategy` and accumulates `Run` results. Manages an `EventListener`. |
+| `Run` | Calls `agent.think` once. Accumulates tool-call steps. |
+| `Agent` | The think-act loop: calls the LLM, executes tools, emits events. |
+| `Strategy` | Controls how many Runs a Task executes. `Simple` = 1 Run; `PlanExecute` = plan + N Runs. |
+
 ## Quick Start
 
 ```ruby
