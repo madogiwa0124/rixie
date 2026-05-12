@@ -108,15 +108,15 @@ class AgentTest < Minitest::Test
       tools: [tool]
     )
 
-    messages = [{role: "user", content: "hello"}]
+    messages = [Rixie::Message::User.new(content: "hello")]
     agent.think(messages: messages, listener: listener)
 
     assert_equal 3, messages.size
-    assert_equal "assistant", messages[1][:role]
-    assert_nil messages[1][:content]
-    assert_equal "tool", messages[2][:role]
-    assert_equal "c1", messages[2][:tool_call_id]
-    assert_equal "found", messages[2][:content]
+    assert_instance_of Rixie::Message::Assistant, messages[1]
+    assert_nil messages[1].content
+    assert_instance_of Rixie::Message::Tool, messages[2]
+    assert_equal "c1", messages[2].tool_call_id
+    assert_equal "found", messages[2].content
   end
 
   def test_llm_call_is_private

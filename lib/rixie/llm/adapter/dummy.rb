@@ -17,12 +17,12 @@ module Rixie
 
         def chat(messages, tools:)
           if @responses.nil?
-            return Rixie::LLM::Response.new(raw: DEFAULT_RESPONSE)
+            return Rixie::LLM::Response.from_openai_wire(DEFAULT_RESPONSE)
           end
 
           raise "Rixie::LLM::Adapter::Dummy exhausted: no more responses enqueued" if @responses.empty?
 
-          Rixie::LLM::Response.new(raw: @responses.shift)
+          Rixie::LLM::Response.from_openai_wire(@responses.shift)
         end
 
         def stream(messages, tools:, &block)
@@ -32,6 +32,7 @@ module Rixie
           end
           response
         end
+
       end
     end
   end

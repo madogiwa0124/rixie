@@ -86,10 +86,10 @@ class AnthropicAdapter
   end
 
   def chat(messages, tools:)
-    params = {model: @model, messages: messages, max_tokens: @max_tokens}
-    params[:tools] = tools unless tools.empty?
+    params = {model: @model, messages: encode_messages(messages), max_tokens: @max_tokens}
+    params[:tools] = encode_tools(tools) unless tools.empty?
     result = @client.messages(parameters: params)
-    Rixie::LLM::Response.new(raw: normalize(result))
+    decode_response(result)
   end
 
   def stream(messages, tools:, &block)
@@ -99,13 +99,36 @@ class AnthropicAdapter
 
   private
 
-  def normalize(result)
+  def encode_messages(messages)
+    messages.map do |msg|
+      case msg
+      when Rixie::Message::System
+        # Anthropic takes system prompt as a top-level parameter; filter these out here
+        # and pass msg.content as `system:` in the API call if needed.
+        nil
+      when Rixie::Message::User
+        {role: "user", content: msg.content}
+      when Rixie::Message::Assistant
+        {role: "assistant", content: msg.content || ""}
+      when Rixie::Message::Tool
+        {role: "user", content: [{type: "tool_result", tool_use_id: msg.tool_call_id, content: msg.content}]}
+      end
+    end.compact
+  end
+
+  def encode_tools(tools)
+    tools.map do |tool|
+      {name: tool.name, description: tool.description, input_schema: tool.input_schema}
+    end
+  end
+
+  def decode_response(result)
     blocks     = result["content"] || []
     tool_calls = blocks.select { |b| b["type"] == "tool_use" }.map do |tc|
-      {"id" => tc["id"], "function" => {"name" => tc["name"], "arguments" => tc["input"].to_json}}
+      Rixie::LLM::ToolCall.new(id: tc["id"], name: tc["name"], arguments: tc["input"])
     end
     content = blocks.find { |b| b["type"] == "text" }&.fetch("text", nil)
-    {"choices" => [{"message" => {"content" => content, "tool_calls" => tool_calls.empty? ? nil : tool_calls}}]}
+    Rixie::LLM::Response.new(content: content, tool_calls: tool_calls, finish_reason: result["stop_reason"])
   end
 end
 

@@ -17,7 +17,7 @@ module Rixie
           Current step: #{@current_step[:title]}
           #{@current_step[:description]}
         PROMPT
-        [{role: "system", content: content}]
+        [Message::System.new(content: content)]
       end
     end
   end

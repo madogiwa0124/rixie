@@ -10,20 +10,37 @@ module Rixie
       end
 
       def to_message
-        messages = [{role: "user", content: @input}]
+        messages = [Message::User.new(content: @input)]
 
         @steps.each do |step|
           tool_calls = step[:tool_calls]
           next if tool_calls.nil? || tool_calls.empty?
 
-          messages << {role: "assistant", content: nil, tool_calls: tool_calls.map(&:to_llm_format)}
+          messages << Message::Assistant.new(content: nil, tool_calls: tool_calls)
           step[:tool_results].each do |r|
-            messages << {role: "tool", tool_call_id: r[:tool_call_id], content: r[:content]}
+            messages << Message::Tool.new(tool_call_id: r[:tool_call_id], content: r[:content])
           end
         end
 
-        messages << {role: "assistant", content: @output}
+        messages << Message::Assistant.new(content: @output, tool_calls: [])
         messages
+      end
+
+      def self.from_store(entry)
+        new(
+          input: entry["input"],
+          steps: entry["steps"].map { |s|
+            {
+              tool_calls: s["tool_calls"].map { |tc|
+                LLM::ToolCall.new(id: tc["id"], name: tc["name"], arguments: tc["arguments"])
+              },
+              tool_results: s["tool_results"].map { |r|
+                {tool_call_id: r["tool_call_id"], content: r["content"]}
+              }
+            }
+          },
+          output: entry["output"]
+        )
       end
 
       def to_store
@@ -32,7 +49,9 @@ module Rixie
           "input" => @input,
           "steps" => @steps.map { |s|
             {
-              "tool_calls" => s[:tool_calls].map(&:to_llm_format),
+              "tool_calls" => s[:tool_calls].map { |tc|
+                {"id" => tc.id, "name" => tc.name, "arguments" => tc.arguments}
+              },
               "tool_results" => s[:tool_results].map { |r|
                 {"tool_call_id" => r[:tool_call_id], "content" => r[:content]}
               }

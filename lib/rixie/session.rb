@@ -85,7 +85,14 @@ module Rixie
 
       return if to_compress.empty?
 
-      summary_input = to_compress.flat_map(&:to_message).to_json
+      summary_input = to_compress.flat_map(&:to_message).map { |msg|
+        case msg
+        when Message::System    then "[system] #{msg.content}"
+        when Message::User      then "[user] #{msg.content}"
+        when Message::Assistant then "[assistant] #{msg.content}"
+        when Message::Tool      then "[tool_result id=#{msg.tool_call_id}] #{msg.content}"
+        end
+      }.join("\n\n")
 
       Rixie.logger.info { "[Session] compressing #{to_compress.size} context entries (keep_recent: #{keep_recent})" }
       task = Task.new(

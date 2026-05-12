@@ -20,15 +20,5 @@ module Rixie
       @call.call(arguments)
     end
 
-    def to_definition
-      {
-        type: "function",
-        function: {
-          name: @name,
-          description: @description,
-          parameters: @input_schema
-        }
-      }
-    end
   end
 end

@@ -72,7 +72,7 @@ class RunTest < Minitest::Test
 
   def test_add_step_appends_to_steps
     run = make_run(make_agent([finish_response]))
-    tc = Rixie::Agent::ToolCall.new(id: "c1", name: "search", arguments: {})
+    tc = Rixie::LLM::ToolCall.new(id: "c1", name: "search", arguments: {})
     run.add_step(tool_calls: [tc], tool_results: [{tool_call_id: "c1", content: "result"}])
     assert_equal 1, run.steps.size
     assert_equal [tc], run.steps.first[:tool_calls]
@@ -98,8 +98,8 @@ class RunTest < Minitest::Test
     history = run.to_history
     assert_instance_of Rixie::Context::History, history
     messages = history.to_message
-    assert_equal "Hello", messages.first[:content]
-    assert_equal "Answer", messages.last[:content]
+    assert_equal "Hello", messages.first.content
+    assert_equal "Answer", messages.last.content
   end
 
   def test_listener_receives_step_completed_events_during_execute
@@ -124,22 +124,22 @@ class RunTest < Minitest::Test
 
   def test_find_tool_call_returns_matching_tool_call
     run = make_run(make_agent([finish_response]))
-    tc = Rixie::Agent::ToolCall.new(id: "c1", name: "plan_done", arguments: {})
+    tc = Rixie::LLM::ToolCall.new(id: "c1", name: "plan_done", arguments: {})
     run.add_step(tool_calls: [tc], tool_results: [])
     assert_equal tc, run.find_tool_call("plan_done")
   end
 
   def test_find_tool_call_returns_nil_when_not_found
     run = make_run(make_agent([finish_response]))
-    tc = Rixie::Agent::ToolCall.new(id: "c1", name: "other", arguments: {})
+    tc = Rixie::LLM::ToolCall.new(id: "c1", name: "other", arguments: {})
     run.add_step(tool_calls: [tc], tool_results: [])
     assert_nil run.find_tool_call("plan_done")
   end
 
   def test_find_tool_call_searches_across_multiple_steps
     run = make_run(make_agent([finish_response]))
-    tc1 = Rixie::Agent::ToolCall.new(id: "c1", name: "search", arguments: {})
-    tc2 = Rixie::Agent::ToolCall.new(id: "c2", name: "plan_done", arguments: {})
+    tc1 = Rixie::LLM::ToolCall.new(id: "c1", name: "search", arguments: {})
+    tc2 = Rixie::LLM::ToolCall.new(id: "c2", name: "plan_done", arguments: {})
     run.add_step(tool_calls: [tc1], tool_results: [])
     run.add_step(tool_calls: [tc2], tool_results: [])
     assert_equal tc2, run.find_tool_call("plan_done")

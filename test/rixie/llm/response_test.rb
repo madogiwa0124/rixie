@@ -3,85 +3,43 @@
 require "test_helper"
 
 class ResponseTest < Minitest::Test
-  WITH_TOOL_CALLS = {
-    "choices" => [{
-      "message" => {
-        "content" => nil,
-        "tool_calls" => [
-          {
-            "id" => "call_abc",
-            "function" => {"name" => "get_weather", "arguments" => '{"location":"Tokyo"}'}
-          }
-        ]
-      }
-    }]
-  }
-
-  WITH_TOOL_CALLS_AND_TEXT = {
-    "choices" => [{
-      "message" => {
-        "content" => "Let me check.",
-        "tool_calls" => [
-          {
-            "id" => "call_abc",
-            "function" => {"name" => "get_weather", "arguments" => '{"location":"Tokyo"}'}
-          }
-        ]
-      }
-    }]
-  }
-
-  FINISH = {
-    "choices" => [{"message" => {"content" => "Hello!", "tool_calls" => nil}}]
-  }
+  def make_tool_call(id: "call_abc", name: "get_weather")
+    Rixie::LLM::ToolCall.new(id: id, name: name, arguments: {"location" => "Tokyo"})
+  end
 
   def test_has_tool_calls_returns_true_when_present
-    response = Rixie::LLM::Response.new(raw: WITH_TOOL_CALLS)
+    response = Rixie::LLM::Response.new(content: nil, tool_calls: [make_tool_call], finish_reason: nil)
     assert response.has_tool_calls?
   end
 
   def test_has_tool_calls_returns_false_when_absent
-    response = Rixie::LLM::Response.new(raw: FINISH)
+    response = Rixie::LLM::Response.new(content: "Hello!", tool_calls: [], finish_reason: "stop")
     refute response.has_tool_calls?
   end
 
   def test_content_returns_text
-    response = Rixie::LLM::Response.new(raw: FINISH)
+    response = Rixie::LLM::Response.new(content: "Hello!", tool_calls: [], finish_reason: "stop")
     assert_equal "Hello!", response.content
   end
 
-  def test_parses_tool_calls
-    response = Rixie::LLM::Response.new(raw: WITH_TOOL_CALLS)
-    tc = response.tool_calls.first
-    assert_equal "call_abc", tc["id"]
-    assert_equal "get_weather", tc["function"]["name"]
-    assert_equal '{"location":"Tokyo"}', tc["function"]["arguments"]
+  def test_tool_calls_returns_tool_call_objects
+    tc = make_tool_call
+    response = Rixie::LLM::Response.new(content: nil, tool_calls: [tc], finish_reason: nil)
+    assert_equal [tc], response.tool_calls
   end
 
   def test_content_is_nil_when_only_tool_calls
-    response = Rixie::LLM::Response.new(raw: WITH_TOOL_CALLS)
+    response = Rixie::LLM::Response.new(content: nil, tool_calls: [make_tool_call], finish_reason: nil)
     assert_nil response.content
   end
 
-  def test_content_when_tool_calls_and_text_coexist
-    response = Rixie::LLM::Response.new(raw: WITH_TOOL_CALLS_AND_TEXT)
-    assert_equal "Let me check.", response.content
-  end
-
-  def test_finish_has_no_tool_calls
-    response = Rixie::LLM::Response.new(raw: FINISH)
-    refute response.has_tool_calls?
-    assert_equal "Hello!", response.content
-  end
-
-  def test_finish_reason_returns_value_from_raw
-    raw = {"choices" => [{"finish_reason" => "stop", "message" => {"content" => "Hi", "tool_calls" => nil}}]}
-    response = Rixie::LLM::Response.new(raw: raw)
+  def test_finish_reason_returns_value
+    response = Rixie::LLM::Response.new(content: "Hi", tool_calls: [], finish_reason: "stop")
     assert_equal "stop", response.finish_reason
   end
 
   def test_finish_reason_returns_nil_when_absent
-    response = Rixie::LLM::Response.new(raw: FINISH)
+    response = Rixie::LLM::Response.new(content: "Hello!", tool_calls: [], finish_reason: nil)
     assert_nil response.finish_reason
   end
 end

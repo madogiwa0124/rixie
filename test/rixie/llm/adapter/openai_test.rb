@@ -50,6 +50,24 @@ class OpenAIAdapterTest < Minitest::Test
     adapter.instance_variable_get(:@client).define_singleton_method(:chat) { fake_chat }
   end
 
+  def test_chat_encodes_tool_objects_to_openai_format
+    adapter = build_adapter
+    get_captured = stub_client(adapter)
+    tool = Rixie::Tool.new(
+      name: "get_weather",
+      description: "Get weather for a city",
+      input_schema: {type: "object", properties: {city: {type: "string"}}},
+      call: ->(_) { "sunny" }
+    )
+    adapter.chat([], tools: [tool])
+    tools = get_captured.call[:tools]
+    assert_equal 1, tools.size
+    assert_equal "function", tools.first[:type]
+    assert_equal "get_weather", tools.first[:function][:name]
+    assert_equal "Get weather for a city", tools.first[:function][:description]
+    assert_equal tool.input_schema, tools.first[:function][:parameters]
+  end
+
   def test_chat_does_not_include_max_tokens_when_nil
     adapter = build_adapter
     get_captured = stub_client(adapter)
@@ -121,9 +139,10 @@ class OpenAIAdapterTest < Minitest::Test
 
     assert response.has_tool_calls?
     tc = response.tool_calls.first
-    assert_equal "c1", tc["id"]
-    assert_equal "get_weather", tc["function"]["name"]
-    assert_equal "{\"city\": \"Tokyo\"}", tc["function"]["arguments"]
+    assert_instance_of Rixie::LLM::ToolCall, tc
+    assert_equal "c1", tc.id
+    assert_equal "get_weather", tc.name
+    assert_equal({"city" => "Tokyo"}, tc.arguments)
   end
 
   def test_stream_returns_completed_response

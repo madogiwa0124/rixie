@@ -10,12 +10,12 @@ class SummaryTest < Minitest::Test
   def test_to_message_returns_system_role_message
     messages = summary.to_message
     assert_equal 1, messages.size
-    assert_equal "system", messages.first[:role]
+    assert_instance_of Rixie::Message::System, messages.first
   end
 
   def test_to_message_includes_content_with_prefix
     messages = summary.to_message
-    assert_equal "Previous conversation summary:\nKey facts discussed.", messages.first[:content]
+    assert_equal "Previous conversation summary:\nKey facts discussed.", messages.first.content
   end
 
   def test_to_store_returns_hash_with_type_summary

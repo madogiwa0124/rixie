@@ -43,7 +43,7 @@ class CompressorTest < Minitest::Test
     listener = Rixie::EventListener.new
     finished_content = nil
     listener.on(Rixie::Event::Finished) { |e| finished_content = e.content }
-    compressor.think(messages: [{role: "user", content: "history"}], listener: listener)
+    compressor.think(messages: [Rixie::Message::User.new(content: "history")], listener: listener)
     assert_equal "Summary text", finished_content
   end
 end

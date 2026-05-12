@@ -20,29 +20,9 @@ module Rixie
 
       def self.deserialize(entry)
         case entry["type"]
-        when "summary"
-          Context::Summary.new(content: entry["content"])
-        when "history"
-          Context::History.new(
-            input: entry["input"],
-            steps: entry["steps"].map { |s|
-              {
-                tool_calls: s["tool_calls"].map { |tc|
-                  Agent::ToolCall.new(
-                    id: tc["id"],
-                    name: tc.dig("function", "name"),
-                    arguments: JSON.parse(tc.dig("function", "arguments") || "{}")
-                  )
-                },
-                tool_results: s["tool_results"].map { |r|
-                  {tool_call_id: r["tool_call_id"], content: r["content"]}
-                }
-              }
-            },
-            output: entry["output"]
-          )
-        else
-          raise Rixie::Error, "Unknown context entry type: #{entry["type"]}"
+        when "summary" then Context::Summary.from_store(entry)
+        when "history" then Context::History.from_store(entry)
+        else raise Rixie::Error, "Unknown context entry type: #{entry["type"]}"
         end
       end
     end

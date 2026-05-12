@@ -21,7 +21,7 @@ module Rixie
     end
 
     def definitions
-      @tools.values.map(&:to_definition)
+      @tools.values
     end
   end
 end

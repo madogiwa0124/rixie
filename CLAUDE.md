@@ -36,7 +36,7 @@ Task     × N → Session  # Entire conversation
 
 **Rixie::Agent::Thought** — `Data.define(:type, :content, :tool_calls)`. type is `:tool_call` or `:finish`.
 
-**Rixie::Agent::ToolCall** — Owns wire format conversion knowledge. `build_from_raw` / `to_llm_format`.
+**Rixie::LLM::ToolCall** — Provider-agnostic tool call (`id`, `name`, `arguments`). `from_openai_wire` parses OpenAI wire format (used in `LLM::Response.from_openai_wire`). `to_openai_wire` serializes to OpenAI wire format (used internally in `Adapter::OpenAI#encode_message`).
 
 **Rixie::Agent::Plan** — Agent subtype for the planning phase. Wraps a `base_agent` and appends planning instructions. Owns `PLAN_DONE_TOOL` (a no-op tool) by default.
 
@@ -170,3 +170,4 @@ test/support/dummy_adapter.rb  # Inject fake LLM responses in tests
 
 @.claude/rules/configuration.md
 @.claude/rules/testing.md
+@.claude/rules/adapter.md

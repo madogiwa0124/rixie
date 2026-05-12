@@ -57,8 +57,8 @@ module Rixie
     end
 
     def append_tool_messages(thought, tool_results, messages:)
-      messages << {role: "assistant", content: nil, tool_calls: thought.tool_calls.map(&:to_llm_format)}
-      tool_results.each { |r| messages << {role: "tool", tool_call_id: r[:tool_call_id], content: r[:content]} }
+      messages << Message::Assistant.new(content: nil, tool_calls: thought.tool_calls)
+      tool_results.each { |r| messages << Message::Tool.new(tool_call_id: r[:tool_call_id], content: r[:content]) }
     end
 
     def llm_call(messages:, listener:)
@@ -70,7 +70,7 @@ module Rixie
         Thought.new(
           type: :tool_call,
           content: nil,
-          tool_calls: response.tool_calls.map { ToolCall.build_from_raw(it) }
+          tool_calls: response.tool_calls
         )
       else
         Thought.new(type: :finish, content: response.content, tool_calls: [])

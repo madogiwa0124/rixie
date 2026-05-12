@@ -3,7 +3,7 @@
 require "json"
 
 module Rixie
-  class Agent
+  module LLM
     class ToolCall
       attr_reader :id, :name, :arguments
 
@@ -13,7 +13,7 @@ module Rixie
         @arguments = arguments
       end
 
-      def self.build_from_raw(raw)
+      def self.from_openai_wire(raw)
         new(
           id: raw["id"],
           name: raw["function"]["name"],
@@ -21,7 +21,7 @@ module Rixie
         )
       end
 
-      def to_llm_format
+      def to_openai_wire
         {
           "id" => @id,
           "type" => "function",

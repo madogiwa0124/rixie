@@ -9,8 +9,12 @@ module Rixie
         @content = content
       end
 
+      def self.from_store(entry)
+        new(content: entry["content"])
+      end
+
       def to_message
-        [{role: "system", content: "Previous conversation summary:\n#{@content}"}]
+        [Message::System.new(content: "Previous conversation summary:\n#{@content}")]
       end
 
       def to_store

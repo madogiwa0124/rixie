@@ -20,14 +20,14 @@ module Rixie
         end
 
         def chat(messages, tools:)
-          result = @client.chat.completions.create(**build_params(messages, tools))
-          Rixie::LLM::Response.new(raw: normalize(result))
+          result = @client.chat.completions.create(**build_params(encode_messages(messages), tools))
+          Rixie::LLM::Response.from_openai_wire(normalize(result))
         rescue ::OpenAI::Errors::Error => e
           raise Rixie::LLM::Error, e.message
         end
 
         def stream(messages, tools:, &block)
-          params = build_params(messages, tools)
+          params = build_params(encode_messages(messages), tools)
 
           content = +""
           accumulated_tool_calls = {}
@@ -53,29 +53,60 @@ module Rixie
             end
           end
 
-          build_stream_response(content, accumulated_tool_calls)
+          Rixie::LLM::Response.from_openai_wire(build_stream_raw(content, accumulated_tool_calls))
         rescue ::OpenAI::Errors::Error => e
           raise Rixie::LLM::Error, e.message
         end
 
         private
 
-        def build_stream_response(content, accumulated_tool_calls)
-          tool_calls = accumulated_tool_calls.empty? ? nil : accumulated_tool_calls.values
-          raw = {
+        def encode_messages(messages)
+          messages.map { |msg| encode_message(msg) }
+        end
+
+        def encode_message(msg)
+          case msg
+          when Rixie::Message::System
+            {role: "system", content: msg.content}
+          when Rixie::Message::User
+            {role: "user", content: msg.content}
+          when Rixie::Message::Assistant
+            h = {role: "assistant", content: msg.content}
+            h[:tool_calls] = msg.tool_calls.map(&:to_openai_wire) unless msg.tool_calls.empty?
+            h
+          when Rixie::Message::Tool
+            {role: "tool", tool_call_id: msg.tool_call_id, content: msg.content}
+          end
+        end
+
+        def build_stream_raw(content, accumulated_tool_calls)
+          tool_calls_raw = accumulated_tool_calls.empty? ? nil : accumulated_tool_calls.values
+          {
             "choices" => [{
               "message" => {
                 "content" => content.empty? ? nil : content,
-                "tool_calls" => tool_calls
+                "tool_calls" => tool_calls_raw
               }
             }]
           }
-          Rixie::LLM::Response.new(raw: raw)
+        end
+
+        def encode_tools(tools)
+          tools.map do |tool|
+            {
+              type: "function",
+              function: {
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.input_schema
+              }
+            }
+          end
         end
 
         def build_params(messages, tools)
           params = {model: @model, messages: messages}
-          params[:tools] = tools unless tools.empty?
+          params[:tools] = encode_tools(tools) unless tools.empty?
           params[:max_tokens] = @max_tokens if @max_tokens
           params[:temperature] = @temperature unless @temperature.nil?
           params
@@ -86,6 +117,7 @@ module Rixie
             "choices" => (result.choices || []).map do |choice|
               message = choice.message
               {
+                "finish_reason" => choice.finish_reason,
                 "message" => {
                   "content" => message.content,
                   "tool_calls" => message.tool_calls&.map do |tc|

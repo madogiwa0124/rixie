@@ -98,8 +98,8 @@ class PlanExecuteTest < Minitest::Test
     plan_ctx_1 = task.runs[1].context.find { |c| c.is_a?(Rixie::Context::Plan) }
     plan_ctx_2 = task.runs[2].context.find { |c| c.is_a?(Rixie::Context::Plan) }
 
-    msg_1 = plan_ctx_1.to_message.first[:content]
-    msg_2 = plan_ctx_2.to_message.first[:content]
+    msg_1 = plan_ctx_1.to_message.first.content
+    msg_2 = plan_ctx_2.to_message.first.content
 
     assert_includes msg_1, "Current step: Step 1"
     assert_includes msg_2, "Current step: Step 2"
@@ -114,7 +114,7 @@ class PlanExecuteTest < Minitest::Test
     run_2_context = task.runs[2].context
     assert_equal 1, run_2_context.count { |c| c.is_a?(Rixie::Context::History) }
     history = run_2_context.find { |c| c.is_a?(Rixie::Context::History) }
-    assert_equal "Step 1 done.", history.to_message.last[:content]
+    assert_equal "Step 1 done.", history.to_message.last.content
   end
 
   # --- extract_plan ---

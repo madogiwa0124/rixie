@@ -85,13 +85,13 @@ class MemoryStoreTest < Minitest::Test
     store.save("s9", [make_history(input: "ping", output: "pong")])
     loaded = store.load("s9")
     messages = loaded.first.to_message
-    assert_equal "ping", messages.first[:content]
-    assert_equal "pong", messages.last[:content]
+    assert_equal "ping", messages.first.content
+    assert_equal "pong", messages.last.content
   end
 
   def test_load_round_trips_summary_content
     store.save("s10", [make_summary(content: "recap")])
     loaded = store.load("s10")
-    assert_equal "Previous conversation summary:\nrecap", loaded.first.to_message.first[:content]
+    assert_equal "Previous conversation summary:\nrecap", loaded.first.to_message.first.content
   end
 end

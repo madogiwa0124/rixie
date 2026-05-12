@@ -2,37 +2,17 @@
 
 module Rixie
   module LLM
-    class Response
-      def initialize(raw:, provider: nil)
-        @raw = raw
-      end
-
-      def finish_reason
-        @raw.dig("choices", 0, "finish_reason")
+    Response = Data.define(:content, :tool_calls, :finish_reason) do
+      def self.from_openai_wire(raw)
+        choices = raw["choices"] || []
+        choice = choices.first || {}
+        message = choice["message"] || {}
+        tool_calls = (message["tool_calls"] || []).map { |tc| LLM::ToolCall.from_openai_wire(tc) }
+        new(content: message["content"], tool_calls: tool_calls, finish_reason: choice["finish_reason"])
       end
 
       def has_tool_calls?
         tool_calls.any?
-      end
-
-      def tool_calls
-        @tool_calls ||= begin
-          message = @raw.dig("choices", 0, "message") || {}
-          calls = message["tool_calls"] || []
-          calls.map do |tc|
-            {
-              "id" => tc["id"],
-              "function" => {
-                "name" => tc.dig("function", "name"),
-                "arguments" => tc.dig("function", "arguments")
-              }
-            }
-          end
-        end
-      end
-
-      def content
-        @content ||= @raw.dig("choices", 0, "message", "content")
       end
     end
   end

@@ -12,15 +12,6 @@ class ToolTest < Minitest::Test
     )
   end
 
-  def test_to_definition_returns_openai_compatible_format
-    tool = make_tool
-    defn = tool.to_definition
-    assert_equal "function", defn[:type]
-    assert_equal "get_weather", defn[:function][:name]
-    assert_equal "Get the weather for a location", defn[:function][:description]
-    assert_equal tool.input_schema, defn[:function][:parameters]
-  end
-
   def test_call_executes_lambda_with_arguments
     received = nil
     tool = Rixie::Tool.new(

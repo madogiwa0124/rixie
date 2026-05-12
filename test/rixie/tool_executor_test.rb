@@ -14,7 +14,7 @@ class ToolExecutorTest < Minitest::Test
   end
 
   def make_tool_call(id:, name:, arguments: {})
-    Rixie::Agent::ToolCall.new(id: id, name: name, arguments: arguments)
+    Rixie::LLM::ToolCall.new(id: id, name: name, arguments: arguments)
   end
 
   def test_execute_calls_matching_tool_and_returns_result
@@ -50,13 +50,13 @@ class ToolExecutorTest < Minitest::Test
     assert_equal [], executor.definitions
   end
 
-  def test_definitions_returns_correct_format
+  def test_definitions_returns_tool_objects
     tool = make_tool(name: "get_weather", result: "sunny")
     executor = Rixie::ToolExecutor.new(tools: [tool])
     defns = executor.definitions
     assert_equal 1, defns.size
-    assert_equal "function", defns.first[:type]
-    assert_equal "get_weather", defns.first[:function][:name]
+    assert_instance_of Rixie::Tool, defns.first
+    assert_equal "get_weather", defns.first.name
   end
 
   def test_return_direct_returns_false_when_no_tool_is_return_direct
