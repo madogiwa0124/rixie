@@ -121,4 +121,27 @@ class RunTest < Minitest::Test
     assert_equal "search", received.first.tool_calls.first.name
     assert_equal 1, run.steps.size
   end
+
+  def test_find_tool_call_returns_matching_tool_call
+    run = make_run(make_agent([finish_response]))
+    tc = Rixie::Agent::ToolCall.new(id: "c1", name: "plan_done", arguments: {})
+    run.add_step(tool_calls: [tc], tool_results: [])
+    assert_equal tc, run.find_tool_call("plan_done")
+  end
+
+  def test_find_tool_call_returns_nil_when_not_found
+    run = make_run(make_agent([finish_response]))
+    tc = Rixie::Agent::ToolCall.new(id: "c1", name: "other", arguments: {})
+    run.add_step(tool_calls: [tc], tool_results: [])
+    assert_nil run.find_tool_call("plan_done")
+  end
+
+  def test_find_tool_call_searches_across_multiple_steps
+    run = make_run(make_agent([finish_response]))
+    tc1 = Rixie::Agent::ToolCall.new(id: "c1", name: "search", arguments: {})
+    tc2 = Rixie::Agent::ToolCall.new(id: "c2", name: "plan_done", arguments: {})
+    run.add_step(tool_calls: [tc1], tool_results: [])
+    run.add_step(tool_calls: [tc2], tool_results: [])
+    assert_equal tc2, run.find_tool_call("plan_done")
+  end
 end

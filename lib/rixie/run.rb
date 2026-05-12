@@ -39,6 +39,10 @@ module Rixie
       @status == "failed"
     end
 
+    def find_tool_call(name)
+      steps.flat_map { |s| s[:tool_calls] }.find { |tc| tc.name == name }
+    end
+
     def to_history
       Context::History.new(input: user_input, steps: steps, output: output)
     end

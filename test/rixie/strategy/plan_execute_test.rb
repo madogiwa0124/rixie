@@ -125,9 +125,7 @@ class PlanExecuteTest < Minitest::Test
     task.execute
 
     plan_run = task.runs.first
-    steps = plan_run.steps.flat_map { |s| s[:tool_calls] }
-      .find { |tc| tc.name == "plan_done" }
-    refute_nil steps
+    refute_nil plan_run.find_tool_call("plan_done")
   end
 
   def test_extract_plan_raises_agent_error_when_plan_done_not_found

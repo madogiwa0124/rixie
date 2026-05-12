@@ -42,9 +42,7 @@ module Rixie
       end
 
       def extract_plan(run)
-        plan_call = run.steps
-          .flat_map { |s| s[:tool_calls] }
-          .find { |tc| tc.name == "plan_done" }
+        plan_call = run.find_tool_call("plan_done")
 
         raise AgentError, "plan_done tool call not found in run steps" if plan_call.nil?
 
