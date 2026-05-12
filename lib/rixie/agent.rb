@@ -34,18 +34,13 @@ module Rixie
 
         case thought.type
         when :tool_call
-          thought.tool_calls.each do |tc|
-            Rixie.logger.info { "[Agent] tool_call: #{tc.name}(#{tc.arguments})" }
-          end
-          tool_results = @tool_executor.execute(thought.tool_calls)
-          tool_results.each do |r|
-            Rixie.logger.info { "[Agent] tool_result: #{r[:content].inspect}" }
-          end
-          listener.emit(Event::StepCompleted.new(tool_calls: thought.tool_calls, tool_results: tool_results))
-          messages << {role: "assistant", content: nil, tool_calls: thought.tool_calls.map(&:to_llm_format)}
-          tool_results.each { |r| messages << {role: "tool", tool_call_id: r[:tool_call_id], content: r[:content]} }
           step_count += 1
-          raise MaxStepsExceededError, "Max steps (#{@max_steps}) exceeded" if step_count >= @max_steps
+          thought.tool_calls.each { |tc| Rixie.logger.info { "[Agent] tool_call: #{tc.name}(#{tc.arguments})" } }
+          tool_results = @tool_executor.execute(thought.tool_calls)
+          tool_results.each { |r| Rixie.logger.info { "[Agent] tool_result: #{r[:content].inspect}" } }
+          listener.emit(Event::StepCompleted.new(tool_calls: thought.tool_calls, tool_results: tool_results))
+          append_tool_messages(thought, tool_results, messages:)
+          raise MaxStepsExceededError, "Max steps (#{@max_steps}) exceeded" if max_steps_exceeded?(step_count)
           return nil if @tool_executor.return_direct?(thought.tool_calls)
         when :finish
           Rixie.logger.info { "[Agent] finish: #{thought.content.inspect}" }
@@ -56,6 +51,15 @@ module Rixie
     end
 
     private
+
+    def max_steps_exceeded?(step_count)
+      step_count >= @max_steps
+    end
+
+    def append_tool_messages(thought, tool_results, messages:)
+      messages << {role: "assistant", content: nil, tool_calls: thought.tool_calls.map(&:to_llm_format)}
+      tool_results.each { |r| messages << {role: "tool", tool_call_id: r[:tool_call_id], content: r[:content]} }
+    end
 
     def llm_call(messages:, listener:)
       response = @llm_client.call(messages, tools: @tool_executor.definitions) { |event| listener.emit(event) }
