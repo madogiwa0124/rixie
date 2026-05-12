@@ -237,6 +237,33 @@ session = Rixie::Session.new(
 | `Rixie::MCP::ProtocolError` | MCP server returns a JSON-RPC error |
 | `Rixie::MCP::RequestError` | Network or other HTTP error |
 
+## Human-in-the-loop
+
+Include `Rixie::Tool::HumanInput` in the tools list to let the agent ask the user for input or approval before proceeding. When the LLM calls `human_input`, the question is returned as the tool result, causing the agent to surface it as its final response. The user answers in the next `session.chat` call, and the existing context accumulation handles continuity naturally — no special state management is needed.
+
+```ruby
+session = Rixie::Session.new(
+  instructions: "You are a careful assistant. Always ask for user " \
+                "confirmation before performing destructive operations.",
+  tools: [
+    Rixie::Tool::HumanInput,
+    file_deletion_tool
+  ]
+)
+
+# Turn 1: LLM asks for confirmation
+response = session.chat("Delete all log files.")
+puts response
+# => "Are you sure you want to delete all log files? This cannot be undone."
+
+# Turn 2: User confirms, LLM proceeds
+response = session.chat("Yes, go ahead.")
+puts response
+# => "Done. All log files have been deleted."
+```
+
+`Rixie::Tool::HumanInput` is opt-in — omitting it from the tools list means the agent will proceed without asking.
+
 ## Strategies
 
 ### Strategy::Simple (default)
