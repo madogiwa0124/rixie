@@ -3,12 +3,13 @@
 require "test_helper"
 
 class ToolExecutorTest < Minitest::Test
-  def make_tool(name:, result:)
+  def make_tool(name:, result:, return_direct: false)
     Rixie::Tool.new(
       name: name,
       description: "desc",
       input_schema: {},
-      call: ->(_args) { result }
+      call: ->(_args) { result },
+      return_direct: return_direct
     )
   end
 
@@ -56,6 +57,33 @@ class ToolExecutorTest < Minitest::Test
     assert_equal 1, defns.size
     assert_equal "function", defns.first[:type]
     assert_equal "get_weather", defns.first[:function][:name]
+  end
+
+  def test_return_direct_returns_false_when_no_tool_is_return_direct
+    executor = Rixie::ToolExecutor.new(tools: [make_tool(name: "greet", result: "hello")])
+    calls = [make_tool_call(id: "c1", name: "greet")]
+    refute executor.return_direct?(calls)
+  end
+
+  def test_return_direct_returns_true_when_called_tool_is_return_direct
+    executor = Rixie::ToolExecutor.new(tools: [make_tool(name: "stop", result: "done", return_direct: true)])
+    calls = [make_tool_call(id: "c1", name: "stop")]
+    assert executor.return_direct?(calls)
+  end
+
+  def test_return_direct_returns_true_when_any_called_tool_is_return_direct
+    executor = Rixie::ToolExecutor.new(tools: [
+      make_tool(name: "normal", result: "ok"),
+      make_tool(name: "stop", result: "done", return_direct: true)
+    ])
+    calls = [make_tool_call(id: "c1", name: "normal"), make_tool_call(id: "c2", name: "stop")]
+    assert executor.return_direct?(calls)
+  end
+
+  def test_return_direct_returns_false_for_unknown_tool
+    executor = Rixie::ToolExecutor.new(tools: [])
+    calls = [make_tool_call(id: "c1", name: "unknown")]
+    refute executor.return_direct?(calls)
   end
 
   def test_raises_agent_error_when_tool_not_found

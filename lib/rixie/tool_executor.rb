@@ -16,6 +16,10 @@ module Rixie
       end
     end
 
+    def return_direct?(tool_calls)
+      tool_calls.any? { |tc| @tools[tc.name]&.return_direct? }
+    end
+
     def definitions
       @tools.values.map(&:to_definition)
     end

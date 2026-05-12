@@ -17,7 +17,8 @@ module Rixie
         },
         required: ["question"]
       },
-      call: ->(args) { args["question"] }
+      call: ->(args) { args["question"] },
+      return_direct: true
     )
   end
 end

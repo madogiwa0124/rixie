@@ -23,7 +23,8 @@ module Rixie
           },
           required: ["steps"]
         },
-        call: ->(_args) { "Planning complete." }
+        call: ->(_args) { "Planning complete." },
+        return_direct: true
       )
 
       DEFAULT_PLANNING_INSTRUCTIONS = <<~INSTRUCTIONS
@@ -53,8 +54,7 @@ module Rixie
         @internal_agent ||= Agent.new(
           instructions: instructions,
           tools: tools,
-          llm_client: @base_agent.llm_client,
-          return_direct_tools: [PLAN_DONE_TOOL.name]
+          llm_client: @base_agent.llm_client
         )
       end
     end

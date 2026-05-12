@@ -264,6 +264,8 @@ puts response
 
 `Rixie::Tool::HumanInput` is opt-in — omitting it from the tools list means the agent will proceed without asking.
 
+`HumanInput` is defined with `return_direct: true`, which causes the agent to stop the think-act loop immediately after the tool call and return the question as its response, rather than continuing to loop. You can use this flag on any custom tool that should short-circuit the loop in the same way.
+
 ## Strategies
 
 ### Strategy::Simple (default)
