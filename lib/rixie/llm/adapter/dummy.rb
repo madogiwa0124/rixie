@@ -32,7 +32,6 @@ module Rixie
           end
           response
         end
-
       end
     end
   end

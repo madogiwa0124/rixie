@@ -87,10 +87,10 @@ module Rixie
 
       summary_input = to_compress.flat_map(&:to_message).map { |msg|
         case msg
-        when Message::System    then "[system] #{msg.content}"
-        when Message::User      then "[user] #{msg.content}"
+        when Message::System then "[system] #{msg.content}"
+        when Message::User then "[user] #{msg.content}"
         when Message::Assistant then "[assistant] #{msg.content}"
-        when Message::Tool      then "[tool_result id=#{msg.tool_call_id}] #{msg.content}"
+        when Message::Tool then "[tool_result id=#{msg.tool_call_id}] #{msg.content}"
         end
       }.join("\n\n")
 

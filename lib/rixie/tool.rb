@@ -19,6 +19,5 @@ module Rixie
     def call(arguments)
       @call.call(arguments)
     end
-
   end
 end
