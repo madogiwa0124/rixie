@@ -62,7 +62,7 @@ module Rixie
 
         listener = EventListener.new
         listener.on(Event::Token) { |e| yielder << e }
-        listener.on(Event::StepCompleted) { |e| yielder << e }
+        listener.on(Event::ThoughtCompleted) { |e| yielder << e }
         listener.on(Event::Finished) { |e| yielder << e }
 
         task = Task.new(

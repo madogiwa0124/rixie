@@ -18,9 +18,6 @@ module Rixie
     def execute(listener: nil)
       Rixie.logger.info { "[Task] started: #{@user_input.inspect}" } unless @silent
       listener ||= EventListener.new
-      listener.on(Event::StepCompleted) { |e|
-        runs.last.add_step(tool_calls: e.tool_calls, tool_results: e.tool_results)
-      }
 
       result = @strategy.run(task: self, listener:)
       @output = result

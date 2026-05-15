@@ -7,8 +7,8 @@ class MemoryStoreTest < Minitest::Test
     @store ||= Rixie::Store::Memory.new
   end
 
-  def make_history(input: "Hello", output: "Hi", steps: [])
-    Rixie::Context::History.new(input: input, steps: steps, output: output)
+  def make_history(input: "Hello", output: "Hi", thoughts: [])
+    Rixie::Context::History.new(input: input, thoughts: thoughts, output: output)
   end
 
   def make_summary(content: "Summary text")

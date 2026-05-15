@@ -95,7 +95,7 @@ class LiveStreamingTest < Integration::TestCase
 
     assert events.all? { |e|
       e.is_a?(Rixie::Event::Token) ||
-        e.is_a?(Rixie::Event::StepCompleted) ||
+        e.is_a?(Rixie::Event::ThoughtCompleted) ||
         e.is_a?(Rixie::Event::Finished)
     }
   end
@@ -150,7 +150,7 @@ class LiveStreamingTest < Integration::TestCase
 
   # --- tool use ---
 
-  def test_live_with_tool_use_yields_step_completed
+  def test_live_with_tool_use_yields_thought_completed
     session = make_session(
       tools: [weather_tool],
       stream_responses: [
@@ -160,18 +160,19 @@ class LiveStreamingTest < Integration::TestCase
     )
     events = session.live("What's the weather in Tokyo?").to_a
 
-    step_events = events.select { |e| e.is_a?(Rixie::Event::StepCompleted) }
-    assert_equal 1, step_events.size
+    thought_events = events.select { |e| e.is_a?(Rixie::Event::ThoughtCompleted) }
+    tool_call_events = thought_events.select { |e| e.thought.tool_call? }
+    assert_equal 1, tool_call_events.size
 
     unless live?
-      step = step_events.first
-      assert_equal 1, step.tool_calls.size
-      assert_equal "get_weather", step.tool_calls.first.name
-      assert_equal [{tool_call_id: "c1", content: "Sunny, 25°C in Tokyo"}], step.tool_results
+      thought = tool_call_events.first.thought
+      assert_equal 1, thought.tool_calls.size
+      assert_equal "get_weather", thought.tool_calls.first.name
+      assert_equal [{tool_call_id: "c1", content: "Sunny, 25°C in Tokyo"}], thought.tool_results
     end
   end
 
-  def test_live_with_tool_use_step_completed_precedes_finished
+  def test_live_with_tool_use_thought_completed_precedes_finished
     session = make_session(
       tools: [weather_tool],
       stream_responses: [
@@ -186,9 +187,9 @@ class LiveStreamingTest < Integration::TestCase
 
     # In live mode the LLM may choose not to call the tool, so only assert ordering in dummy mode.
     unless live?
-      step_index = events.index { |e| e.is_a?(Rixie::Event::StepCompleted) }
-      refute_nil step_index
-      assert step_index < finished_index
+      tool_call_index = events.index { |e| e.is_a?(Rixie::Event::ThoughtCompleted) && e.thought.tool_call? }
+      refute_nil tool_call_index
+      assert tool_call_index < finished_index
     end
   end
 
@@ -203,7 +204,32 @@ class LiveStreamingTest < Integration::TestCase
     session.live("Weather in Osaka?").to_a
 
     run = session.tasks.first.runs.first
-    assert_equal 1, run.steps.size unless live?
+    assert_equal 1, run.thoughts.count(&:tool_call?) unless live?
+  end
+
+  # --- return_direct ---
+
+  def test_live_with_return_direct_tool_emits_finished_with_nil_content
+    return if live?
+
+    submit_tool = Rixie::Tool.new(
+      name: "submit",
+      description: "Submit and stop immediately.",
+      input_schema: {"type" => "object", "properties" => {}},
+      call: ->(_args) { "submitted" },
+      return_direct: true
+    )
+    session = make_session(
+      tools: [submit_tool],
+      stream_responses: [tool_call_response(id: "c1", name: "submit")]
+    )
+
+    events = session.live("Please submit.").to_a
+
+    finished = events.select { |e| e.is_a?(Rixie::Event::Finished) }
+    assert_equal 1, finished.size
+    assert_nil finished.first.content
+    assert_instance_of Rixie::Event::Finished, events.last
   end
 
   # --- strategy ---

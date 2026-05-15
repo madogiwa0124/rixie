@@ -70,12 +70,20 @@ class RunTest < Minitest::Test
     assert_raises(RuntimeError) { run.execute(listener: listener) }
   end
 
-  def test_add_step_appends_to_steps
-    run = make_run(make_agent([finish_response]))
-    tc = Rixie::LLM::ToolCall.new(id: "c1", name: "search", arguments: {})
-    run.add_step(tool_calls: [tc], tool_results: [{tool_call_id: "c1", content: "result"}])
-    assert_equal 1, run.steps.size
-    assert_equal [tc], run.steps.first[:tool_calls]
+  def test_execute_populates_thoughts_from_think_result
+    tool = Rixie::Tool.new(name: "search", description: "s", input_schema: {}, call: ->(_) { "found" })
+    agent = make_agent(
+      [tool_call_response(id: "c1", name: "search"), finish_response],
+      tools: [tool]
+    )
+    run = make_run(agent)
+    run.execute(listener: listener)
+
+    assert_equal 2, run.thoughts.size
+    assert run.thoughts[0].tool_call?
+    assert_equal "search", run.thoughts[0].tool_calls.first.name
+    assert_equal [{tool_call_id: "c1", content: "found"}], run.thoughts[0].tool_results
+    assert run.thoughts[1].finish?
   end
 
   def test_completed_returns_true_when_status_is_completed
@@ -102,7 +110,7 @@ class RunTest < Minitest::Test
     assert_equal "Answer", messages.last.content
   end
 
-  def test_listener_receives_step_completed_events_during_execute
+  def test_listener_receives_thought_completed_events_during_execute
     tool = Rixie::Tool.new(name: "search", description: "s", input_schema: {}, call: ->(_) { "found" })
     agent = make_agent(
       [tool_call_response(id: "c1", name: "search"), finish_response],
@@ -111,37 +119,52 @@ class RunTest < Minitest::Test
     run = make_run(agent)
 
     received = []
-    listener.on(Rixie::Event::StepCompleted) do |e|
-      received << e
-      run.add_step(tool_calls: e.tool_calls, tool_results: e.tool_results)
-    end
+    listener.on(Rixie::Event::ThoughtCompleted) { |e| received << e }
     run.execute(listener: listener)
 
-    assert_equal 1, received.size
-    assert_equal "search", received.first.tool_calls.first.name
-    assert_equal 1, run.steps.size
+    tool_call_events = received.select { |e| e.thought.tool_call? }
+    assert_equal 1, tool_call_events.size
+    assert_equal "search", tool_call_events.first.thought.tool_calls.first.name
   end
 
   def test_find_tool_call_returns_matching_tool_call
-    run = make_run(make_agent([finish_response]))
-    tc = Rixie::LLM::ToolCall.new(id: "c1", name: "plan_done", arguments: {})
-    run.add_step(tool_calls: [tc], tool_results: [])
-    assert_equal tc, run.find_tool_call("plan_done")
+    tool = Rixie::Tool.new(name: "plan_done", description: "d", input_schema: {}, call: ->(_) { "ok" })
+    agent = make_agent(
+      [tool_call_response(id: "c1", name: "plan_done"), finish_response],
+      tools: [tool]
+    )
+    run = make_run(agent)
+    run.execute(listener: listener)
+    found = run.find_tool_call("plan_done")
+    assert_equal "plan_done", found.name
   end
 
   def test_find_tool_call_returns_nil_when_not_found
-    run = make_run(make_agent([finish_response]))
-    tc = Rixie::LLM::ToolCall.new(id: "c1", name: "other", arguments: {})
-    run.add_step(tool_calls: [tc], tool_results: [])
+    tool = Rixie::Tool.new(name: "other", description: "d", input_schema: {}, call: ->(_) { "ok" })
+    agent = make_agent(
+      [tool_call_response(id: "c1", name: "other"), finish_response],
+      tools: [tool]
+    )
+    run = make_run(agent)
+    run.execute(listener: listener)
     assert_nil run.find_tool_call("plan_done")
   end
 
-  def test_find_tool_call_searches_across_multiple_steps
-    run = make_run(make_agent([finish_response]))
-    tc1 = Rixie::LLM::ToolCall.new(id: "c1", name: "search", arguments: {})
-    tc2 = Rixie::LLM::ToolCall.new(id: "c2", name: "plan_done", arguments: {})
-    run.add_step(tool_calls: [tc1], tool_results: [])
-    run.add_step(tool_calls: [tc2], tool_results: [])
-    assert_equal tc2, run.find_tool_call("plan_done")
+  def test_find_tool_call_searches_across_multiple_thoughts
+    search_tool = Rixie::Tool.new(name: "search", description: "d", input_schema: {}, call: ->(_) { "r1" })
+    plan_tool = Rixie::Tool.new(name: "plan_done", description: "d", input_schema: {}, call: ->(_) { "r2" })
+    agent = make_agent(
+      [
+        tool_call_response(id: "c1", name: "search"),
+        tool_call_response(id: "c2", name: "plan_done"),
+        finish_response
+      ],
+      tools: [search_tool, plan_tool]
+    )
+    run = make_run(agent)
+    run.execute(listener: listener)
+    found = run.find_tool_call("plan_done")
+    assert_equal "plan_done", found.name
+    assert_equal "c2", found.id
   end
 end

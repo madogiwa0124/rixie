@@ -294,7 +294,7 @@ class SessionTest < Minitest::Test
     assert_equal "Hello", tokens.map(&:delta).join
   end
 
-  def test_live_yields_event_step_completed_events
+  def test_live_yields_event_thought_completed_events
     tool = Rixie::Tool.new(name: "search", description: "desc", input_schema: {}, call: ->(_) { "found" })
     session = Rixie::Session.new(
       instructions: "Be helpful.",
@@ -306,9 +306,10 @@ class SessionTest < Minitest::Test
       ])
     )
     events = session.live("hi").to_a
-    step_events = events.select { |e| e.is_a?(Rixie::Event::StepCompleted) }
-    assert_equal 1, step_events.size
-    assert_equal "search", step_events.first.tool_calls.first.name
+    thought_events = events.select { |e| e.is_a?(Rixie::Event::ThoughtCompleted) }
+    tool_call_events = thought_events.select { |e| e.thought.tool_call? }
+    assert_equal 1, tool_call_events.size
+    assert_equal "search", tool_call_events.first.thought.tool_calls.first.name
   end
 
   def test_live_yields_event_finished_event

@@ -40,9 +40,10 @@ class ToolUseTest < Integration::TestCase
     unless live?
       assert_equal "The weather in Tokyo is sunny at 25°C.", output
       run = task.runs.first
-      assert_equal 1, run.steps.size
-      assert_equal "get_weather", run.steps.first[:tool_calls].first.name
-      assert_equal "Sunny, 25°C in Tokyo", run.steps.first[:tool_results].first[:content]
+      tool_thoughts = run.thoughts.select(&:tool_call?)
+      assert_equal 1, tool_thoughts.size
+      assert_equal "get_weather", tool_thoughts.first.tool_calls.first.name
+      assert_equal "Sunny, 25°C in Tokyo", tool_thoughts.first.tool_results.first[:content]
     end
   end
 
@@ -66,8 +67,9 @@ class ToolUseTest < Integration::TestCase
     refute_empty output
 
     unless live?
-      assert_equal 2, task.runs.first.steps.size
-      cities = task.runs.first.steps.map { |s| s[:tool_calls].first.arguments["city"] }
+      tool_thoughts = task.runs.first.thoughts.select(&:tool_call?)
+      assert_equal 2, tool_thoughts.size
+      cities = tool_thoughts.map { |t| t.tool_calls.first.arguments["city"] }
       assert_equal %w[Tokyo Osaka], cities
     end
   end

@@ -57,7 +57,7 @@ class TaskTest < Minitest::Test
     assert_raises(RuntimeError) { task.execute }
   end
 
-  def test_execute_subscribes_step_completed_to_runs_last_add_step
+  def test_execute_populates_runs_last_thoughts_via_agent_think
     tool = Rixie::Tool.new(name: "search", description: "s", input_schema: {}, call: ->(_) { "found" })
     agent = make_agent(
       [tool_call_response(id: "c1", name: "search"), finish_response],
@@ -66,8 +66,8 @@ class TaskTest < Minitest::Test
     task = make_task(agent)
     task.execute
 
-    assert_equal 1, task.runs.last.steps.size
-    assert_equal "search", task.runs.last.steps.first[:tool_calls].first.name
+    assert_equal 2, task.runs.last.thoughts.size
+    assert_equal "search", task.runs.last.thoughts.first.tool_calls.first.name
   end
 
   def test_completed_returns_true_when_completed

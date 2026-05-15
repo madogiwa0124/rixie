@@ -3,21 +3,21 @@
 module Rixie
   module Context
     class History
-      def initialize(input:, steps:, output:)
+      def initialize(input:, thoughts:, output:)
         @input = input
-        @steps = steps
+        @thoughts = thoughts
         @output = output
       end
 
       def to_message
         messages = [Message::User.new(content: @input)]
 
-        @steps.each do |step|
-          tool_calls = step[:tool_calls]
-          next if tool_calls.nil? || tool_calls.empty?
+        @thoughts.each do |thought|
+          next unless thought.tool_call?
+          next if thought.tool_calls.nil? || thought.tool_calls.empty?
 
-          messages << Message::Assistant.new(content: nil, tool_calls: tool_calls)
-          step[:tool_results].each do |r|
+          messages << Message::Assistant.new(content: nil, tool_calls: thought.tool_calls)
+          thought.tool_results.each do |r|
             messages << Message::Tool.new(tool_call_id: r[:tool_call_id], content: r[:content])
           end
         end
@@ -27,32 +27,28 @@ module Rixie
       end
 
       def self.from_store(entry)
-        new(
-          input: entry["input"],
-          steps: entry["steps"].map { |s|
-            {
-              tool_calls: s["tool_calls"].map { |tc|
-                LLM::ToolCall.new(id: tc["id"], name: tc["name"], arguments: tc["arguments"])
-              },
-              tool_results: s["tool_results"].map { |r|
-                {tool_call_id: r["tool_call_id"], content: r["content"]}
-              }
-            }
-          },
-          output: entry["output"]
-        )
+        thoughts = (entry["thoughts"] || []).map { |t|
+          tool_calls = t["tool_calls"].map { |tc|
+            LLM::ToolCall.new(id: tc["id"], name: tc["name"], arguments: tc["arguments"])
+          }
+          tool_results = t["tool_results"].map { |r|
+            {tool_call_id: r["tool_call_id"], content: r["content"]}
+          }
+          Agent::Thought.new(type: :tool_call, content: nil, tool_calls: tool_calls, tool_results: tool_results)
+        }
+        new(input: entry["input"], thoughts: thoughts, output: entry["output"])
       end
 
       def to_store
         {
           "type" => "history",
           "input" => @input,
-          "steps" => @steps.map { |s|
+          "thoughts" => @thoughts.select(&:tool_call?).map { |t|
             {
-              "tool_calls" => s[:tool_calls].map { |tc|
+              "tool_calls" => t.tool_calls.map { |tc|
                 {"id" => tc.id, "name" => tc.name, "arguments" => tc.arguments}
               },
-              "tool_results" => s[:tool_results].map { |r|
+              "tool_results" => t.tool_results.map { |r|
                 {"tool_call_id" => r[:tool_call_id], "content" => r[:content]}
               }
             }

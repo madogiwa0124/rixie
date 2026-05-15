@@ -53,9 +53,10 @@ class SmokeTest < Integration::TestCase
     task = session.tasks.first
     run = task.runs.first
 
+    tool_thoughts = run.thoughts.select(&:tool_call?)
     assert task.completed?
-    assert_equal 1, run.steps.size
-    assert_equal "get_weather", run.steps.first[:tool_calls].first.name
+    assert_equal 1, tool_thoughts.size
+    assert_equal "get_weather", tool_thoughts.first.tool_calls.first.name
     assert_instance_of String, output
     assert_match(/Tokyo/i, output) if live?
     assert_equal "It is sunny in Tokyo.", output unless live?

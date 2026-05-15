@@ -361,9 +361,11 @@ session.live("Tell me about Ruby.").each do |event|
   when Rixie::Event::Token
     print event.delta   # each streamed text chunk
     $stdout.flush
-  when Rixie::Event::StepCompleted
-    # emitted after each tool call round-trip
-    puts "\n[tool] #{event.tool_calls.map(&:name).join(", ")}"
+  when Rixie::Event::ThoughtCompleted
+    # emitted after each iteration of the think loop
+    if event.thought.tool_call?
+      puts "\n[tool] #{event.thought.tool_calls.map(&:name).join(", ")}"
+    end
   when Rixie::Event::Finished
     puts "\n[done] #{event.content}"
   end
@@ -375,14 +377,14 @@ end
 | Class | Fields | Emitted when |
 | --- | --- | --- |
 | `Rixie::Event::Token` | `delta: String` | A text chunk arrives from the LLM |
-| `Rixie::Event::StepCompleted` | `tool_calls:`, `tool_results:` | The agent finishes one tool-call round-trip |
+| `Rixie::Event::ThoughtCompleted` | `thought: Thought` | A single iteration of the think loop completes (either a tool call with results, or a finish) |
 | `Rixie::Event::Finished` | `content: String` | The agent produces its final answer |
 
 `Event::Finished#content` is the full concatenated response — the same string you would get from `session.chat`.
 
 ### Streaming with tool use
 
-`live` supports tools the same way `chat` does. `Event::StepCompleted` is emitted after each tool call, before streaming continues.
+`live` supports tools the same way `chat` does. `Event::ThoughtCompleted` is emitted after each iteration; check `event.thought.tool_call?` to react specifically to tool execution rounds.
 
 ```ruby
 session = Rixie::Session.new(
@@ -392,9 +394,9 @@ session = Rixie::Session.new(
 
 session.live("What's the weather in Tokyo?").each do |event|
   case event
-  when Rixie::Event::Token         then print event.delta
-  when Rixie::Event::StepCompleted then puts "\n[called #{event.tool_calls.first.name}]"
-  when Rixie::Event::Finished      then puts "\n#{event.content}"
+  when Rixie::Event::Token            then print event.delta
+  when Rixie::Event::ThoughtCompleted then puts "\n[called #{event.thought.tool_calls.first.name}]" if event.thought.tool_call?
+  when Rixie::Event::Finished         then puts "\n#{event.content}"
   end
 end
 ```

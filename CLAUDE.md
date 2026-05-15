@@ -30,11 +30,14 @@ Task     × N → Session  # Entire conversation
 
 **Rixie::Agent** — Core domain object. Owns the think + act loop, LLM communication, and tool execution.
 
-- `think(messages:, listener:)` — public: full loop (llm_call × N). Continues if tool_call is returned, exits on finish.
-- `llm_call(messages:)` — private: single LLM call, returns a `Thought`.
+- `think(messages:, listener:)` — public: full loop (llm_call × N). Continues if tool_call is returned, exits on finish. Returns `ThinkResult(content:, thoughts:)`.
+- `llm_call(messages:)` — private: single LLM call, returns a `Thought` with `tool_results: nil` (filled in by the loop after tool execution).
 - Owns `@tool_executor` internally (synchronous execution).
+- `max_steps` is enforced as a precondition on the `:tool_call` branch, checked **before** incrementing the counter or executing the tools. Counts only `:tool_call` thoughts.
 
-**Rixie::Agent::Thought** — `Data.define(:type, :content, :tool_calls)`. type is `:tool_call` or `:finish`.
+**Rixie::Agent::Thought** — `Data.define(:type, :content, :tool_calls, :tool_results)`. type is `:tool_call` or `:finish`. For `:tool_call` thoughts, `tool_results` is filled in after tool execution (via `Thought#with`). For `:finish` thoughts, `tool_results` is `nil`. Provides `tool_call?` / `finish?` predicates.
+
+**Rixie::Agent::ThinkResult** — `Data.define(:content, :thoughts)`. Return value of `Agent#think`. `content` is `String | nil` — a string for the `:finish` exit path, `nil` for the `return_direct` exit path. `thoughts` is the full per-iteration record.
 
 **Rixie::LLM::ToolCall** — Provider-agnostic tool call (`id`, `name`, `arguments`). `from_openai_wire` parses OpenAI wire format (used in `LLM::Response.from_openai_wire`). `to_openai_wire` serializes to OpenAI wire format (used internally in `Adapter::OpenAI#encode_message`).
 
@@ -44,7 +47,7 @@ Task     × N → Session  # Entire conversation
 
 **Rixie::Task** — Unit that accomplishes a single goal. Owns a strategy and manages a collection of Runs. Creates an `EventListener` and passes it to the strategy on execution.
 
-**Rixie::Run** — Unit that returns a response for a single input. Calls `agent.think`. Accumulates steps via `add_step`. Returns `Context::History` via `to_history`.
+**Rixie::Run** — Unit that returns a response for a single input. Calls `agent.think` and unwraps `ThinkResult` into `@output` (string) and `@thoughts` (`Array<Thought>`). `find_tool_call(name)` scans across thoughts. Returns `Context::History` via `to_history`.
 
 **Rixie::Context::History** — Conversation history entry. Implements `to_message` returning OpenAI wire format messages (user / assistant / tool / tool_result).
 
@@ -60,9 +63,10 @@ Task     × N → Session  # Entire conversation
 
 **Rixie::ToolExecutor** — Owned by Agent. Executes tool calls and returns results. Unifies `BuiltinTools` and `MCPTools` via a common `Tool` interface.
 
-**Rixie::EventListener** — Instance-based pub/sub (not global). Scoped to a single Task lifecycle to prevent cross-talk between concurrent sessions.
+**Rixie::EventListener** — Instance-based pub/sub (not global). Scoped to a single Task lifecycle to prevent cross-talk between concurrent sessions. Used for external observability (e.g. streaming, logging) — internal state flows through return values, not events.
 
-- Events emitted by Agent: `:step_completed` `{ tool_calls:, tool_results: }`, `:finished` `{ content: }`, `:token` `{ delta: }` (future).
+- Events emitted by Agent: `Event::ThoughtCompleted` `{ thought: }` (fires for every iteration — both `:tool_call` and `:finish` thoughts), `Event::Finished` `{ content: String | nil }` (Run-terminal singleton — always fires exactly once when `Agent#think` returns, regardless of exit path), `Event::Token` `{ delta: }` (streaming).
+- Firing order invariant: within a single iteration `Token*` may stream, then `ThoughtCompleted` fires; across the whole Run, `Finished` is always the last event (`content` is nil on the `return_direct` exit path).
 
 **Rixie::LLM::Client** — HTTP communication. Resolves provider via `Client::Resolver` on initialization.
 
@@ -86,6 +90,19 @@ Strategy determines how many Runs to execute for a goal. Placing it on Agent wou
 
 **`Agent#think` owns the loop; `Agent::Loop` does not exist as a separate class.**
 Tool calling is a basic protocol of any tool-capable agent, not a strategy. The loop is absorbed into `Agent#think` directly.
+
+**Thought unifies per-iteration LLM decision + execution record.**
+Each iteration of the think loop produces one `Thought`. For `:tool_call` iterations, `tool_results` is filled in after the executor runs (via `Thought#with(tool_results: ...)`). For `:finish` iterations, `tool_results` stays `nil`. This eliminates the prior split between "Thought (pre-execution)" and "Step (post-execution)", and lets `Agent#think` return the full per-iteration history via `ThinkResult.thoughts`. `Run` simply unwraps the result — no event-driven step accumulation needed.
+
+**`Event::Finished` is the Run-terminal singleton.**
+`Finished` fires exactly once per `Agent#think` call, on every exit path. On the normal `:finish` path it carries the LLM's final content (`content: String`). On the `return_direct` path (a tool was marked `return_direct: true`), it carries `content: nil`. Subscribers can rely on "see `Finished` → the Run is done", without caring about which path was taken. `Token` and `ThoughtCompleted` are interior events; `Finished` is always last.
+
+**`max_steps` caps `:tool_call` iterations; checked as a precondition of the tool_call branch.**
+The check happens after `llm_call` returns but **before** incrementing the counter and executing tools. This gives:
+- `max_steps=0` ⇒ "no tool calls allowed". The LLM is called once. `:finish` → success; `:tool_call` → `MaxStepsExceededError` (without executing the tool).
+- `max_steps=N` ⇒ N tool executions are allowed. The (N+1)-th `:tool_call` raises *before* executing. If the (N+1)-th LLM response is `:finish` instead, the agent terminates gracefully — the LLM is allowed to wind down at the boundary.
+
+This trades one potentially-wasted LLM call (when the LLM keeps requesting tools past the budget) for clean `max_steps=0` semantics and graceful boundary termination.
 
 **`Context` entries implement `to_message`.**
 `PromptBuilder` calls `context.flat_map(&:to_message)` without needing to know the type of each entry. New context types (e.g. `Context::Memory`, `Context::RAG`) can be added by implementing `to_message`.

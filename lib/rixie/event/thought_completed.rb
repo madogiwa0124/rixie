@@ -2,6 +2,6 @@
 
 module Rixie
   module Event
-    StepCompleted = Data.define(:tool_calls, :tool_results)
+    ThoughtCompleted = Data.define(:thought)
   end
 end

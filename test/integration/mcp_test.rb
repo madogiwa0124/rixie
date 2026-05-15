@@ -85,9 +85,9 @@ class MCPTest < Integration::TestCase
 
     unless live?
       assert_equal "The current time in Asia/Tokyo is 12:00.", output
-      step = task.runs.first.steps.first
-      assert_equal "get_time", step[:tool_calls].first.name
-      assert_equal "Current time in Asia/Tokyo via get_time: 12:00", step[:tool_results].first[:content]
+      thought = task.runs.first.thoughts.find(&:tool_call?)
+      assert_equal "get_time", thought.tool_calls.first.name
+      assert_equal "Current time in Asia/Tokyo via get_time: 12:00", thought.tool_results.first[:content]
     end
   end
 
@@ -107,7 +107,8 @@ class MCPTest < Integration::TestCase
     output = session.chat("What time is it in UTC and New York?")
 
     unless live?
-      assert_equal 2, session.tasks.first.runs.first.steps.size
+      tool_thoughts = session.tasks.first.runs.first.thoughts.select(&:tool_call?)
+      assert_equal 2, tool_thoughts.size
     end
 
     assert session.tasks.first.completed?

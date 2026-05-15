@@ -17,9 +17,10 @@ class EventListenerTest < Minitest::Test
 
   def test_multiple_subscribers_for_same_class_all_get_called
     calls = []
-    @listener.on(Rixie::Event::StepCompleted) { |_| calls << :first }
-    @listener.on(Rixie::Event::StepCompleted) { |_| calls << :second }
-    @listener.emit(Rixie::Event::StepCompleted.new(tool_calls: [], tool_results: []))
+    thought = Rixie::Agent::Thought.new(type: :finish, content: "done", tool_calls: [], tool_results: nil)
+    @listener.on(Rixie::Event::ThoughtCompleted) { |_| calls << :first }
+    @listener.on(Rixie::Event::ThoughtCompleted) { |_| calls << :second }
+    @listener.emit(Rixie::Event::ThoughtCompleted.new(thought: thought))
     assert_equal [:first, :second], calls
   end
 

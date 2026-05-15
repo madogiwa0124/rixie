@@ -2,13 +2,13 @@
 
 module Rixie
   class Run
-    attr_reader :user_input, :agent, :context, :steps, :status, :output
+    attr_reader :user_input, :agent, :context, :thoughts, :status, :output
 
     def initialize(user_input:, agent:, context:)
       @user_input = user_input
       @agent = agent
       @context = context
-      @steps = []
+      @thoughts = []
       @status = "running"
       @output = nil
     end
@@ -20,15 +20,13 @@ module Rixie
         context: context
       )
 
-      @output = agent.think(messages:, listener:)
+      result = agent.think(messages:, listener:)
+      @output = result.content
+      @thoughts = result.thoughts
       @status = "completed"
     rescue
       @status = "failed"
       raise
-    end
-
-    def add_step(tool_calls:, tool_results:)
-      @steps << {tool_calls: tool_calls, tool_results: tool_results}
     end
 
     def completed?
@@ -40,11 +38,11 @@ module Rixie
     end
 
     def find_tool_call(name)
-      steps.flat_map { |s| s[:tool_calls] }.find { |tc| tc.name == name }
+      thoughts.select(&:tool_call?).flat_map(&:tool_calls).find { it.name == name }
     end
 
     def to_history
-      Context::History.new(input: user_input, steps: steps, output: output)
+      Context::History.new(input: user_input, thoughts: thoughts, output: output)
     end
   end
 end
