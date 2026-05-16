@@ -28,7 +28,7 @@ module Rixie
       )
 
       DEFAULT_PLANNING_INSTRUCTIONS = <<~INSTRUCTIONS
-        First, make a plan to accomplish the given task. When the plan is complete, call plan_done.
+        Make a plan to accomplish the given task. Do not output any text — call plan_done directly with the plan steps.
       INSTRUCTIONS
 
       def initialize(base_agent:, planning_instructions: DEFAULT_PLANNING_INSTRUCTIONS)
