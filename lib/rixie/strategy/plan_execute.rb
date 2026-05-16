@@ -47,6 +47,13 @@ module Rixie
         raise AgentError, "plan_done tool call not found in run steps" if plan_call.nil?
 
         raw_steps = plan_call.arguments[:steps] || plan_call.arguments["steps"]
+        if raw_steps.is_a?(String)
+          begin
+            raw_steps = JSON.parse(raw_steps)
+          rescue JSON::ParserError => e
+            raise AgentError, "plan_done returned invalid JSON for steps: #{e.message}"
+          end
+        end
         steps = raw_steps.map do |s|
           {title: s[:title] || s["title"], description: s[:description] || s["description"]}
         end
