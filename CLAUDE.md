@@ -188,3 +188,4 @@ test/support/dummy_adapter.rb  # Inject fake LLM responses in tests
 @.claude/rules/configuration.md
 @.claude/rules/testing.md
 @.claude/rules/adapter.md
+@.claude/rules/cli.md

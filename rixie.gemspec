@@ -24,13 +24,14 @@ Gem::Specification.new do |spec|
   spec.files = IO.popen(%w[git ls-files -z], chdir: __dir__, err: IO::NULL) do |ls|
     ls.readlines("\x0", chomp: true).reject do |f|
       (f == gemspec) ||
-        f.start_with?(*%w[bin/ Gemfile .gitignore .github/ .standard.yml])
+        f.start_with?(*%w[bin/console bin/setup Gemfile .gitignore .github/ .standard.yml])
     end
   end
-  spec.bindir = "exe"
-  spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
+  spec.bindir = "bin"
+  spec.executables = ["rixie"]
   spec.require_paths = ["lib"]
 
+  spec.add_dependency "cli-ui", "~> 2.0"
   spec.add_dependency "logger"
 
   spec.add_development_dependency "minitest", "~> 5.0"

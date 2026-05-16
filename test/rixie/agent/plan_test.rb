@@ -33,7 +33,7 @@ class PlanTest < Minitest::Test
   def test_instructions_appends_planning_prompt_to_base_agent_instructions
     plan = Rixie::Agent::Plan.new(base_agent: make_agent)
     assert_includes plan.instructions, "You are an assistant."
-    assert_includes plan.instructions, "First, make a plan to accomplish the given task."
+    assert_includes plan.instructions, "Make a plan to accomplish the given task."
     assert_includes plan.instructions, "call plan_done"
   end
 

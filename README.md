@@ -163,6 +163,82 @@ Session          # manages the full conversation; accumulates history across cha
 | `Agent` | The think-act loop: calls the LLM, executes tools, emits events. |
 | `Strategy` | Controls how many Runs a Task executes. `Simple` = 1 Run; `PlanExecute` = plan + N Runs. |
 
+## CLI
+
+Rixie includes an interactive CLI for chatting with an LLM directly from the terminal.
+
+```bash
+bundle exec rixie --provider openai --model gpt-4.1-mini
+```
+
+Ollama is supported as a built-in provider — no registration required:
+
+```bash
+bundle exec rixie --provider ollama --model qwen3.5:4b
+```
+
+### Options
+
+| Option | Description |
+| --- | --- |
+| `--provider PROVIDER` | LLM provider (`openai`, `ollama`, or any registered custom provider) |
+| `--model MODEL` | Model name |
+| `--instructions TEXT` | Override the default system prompt |
+| `--debug` | Print full LLM logs to stdout |
+| `--version` | Print version and exit |
+| `--help` | Print usage and exit |
+
+### Slash commands
+
+Type `/` during a session to run a command. Tab completion is available for all commands and their arguments.
+
+| Command | Description |
+| --- | --- |
+| `/strategy [simple\|plan-execute]` | Switch the execution strategy. Omit the argument for interactive selection. |
+| `/model MODEL` | Switch the model mid-session (resets the LLM client but keeps conversation context). |
+| `/help` | List available commands. |
+
+Type `exit` or press `Ctrl+C` to quit.
+
+### Custom commands
+
+Add your own slash commands by subclassing `Rixie::CLI::Commands::Base` and registering the class with `Rixie::CLI.register_command`.
+
+```ruby
+require "rixie/cli"
+
+class ClearCommand < Rixie::CLI::Commands::Base
+  def name        = "clear"
+  def description = "Clear the terminal screen"
+
+  def call(_arg, cli:)
+    system("clear")
+  end
+end
+
+Rixie::CLI.register_command(ClearCommand)
+Rixie::CLI.start
+```
+
+The `Base` interface:
+
+| Method | Required | Description |
+| --- | --- | --- |
+| `name` | Yes | Command name, used as `/name` in the REPL |
+| `description` | Yes | Shown in `/help` |
+| `call(arg, cli:)` | Yes | Called when the user runs `/name [arg]`. `arg` is the rest of the input after the command name, or `nil`. `cli` is the running `CLI` instance. |
+| `complete(input)` | No | Returns tab-completion candidates as full strings (e.g. `["/name value1", "/name value2"]`). Default: `[]`. |
+
+Use `renderer` (available via the private accessor) for all output — never call `puts` directly:
+
+```ruby
+def call(arg, cli:)
+  renderer.success("Done: #{renderer.bold(arg)}")
+  renderer.error("Something went wrong")
+  renderer.text("Some plain text")
+end
+```
+
 ## Quick Start
 
 ```ruby

@@ -9,6 +9,11 @@ module Rixie
             adapter: :openai,
             base_url: "https://api.openai.com/v1",
             api_key: -> { ENV["OPENAI_API_KEY"] }
+          },
+          "ollama" => {
+            adapter: :openai,
+            base_url: "http://localhost:11434/v1",
+            api_key: -> { "ollama" }
           }
         }.freeze
 
