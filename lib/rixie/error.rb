@@ -15,6 +15,7 @@ module Rixie
 
   module LLM
     class Error < ::Rixie::Error; end
+    class ResponseTruncatedError < Error; end
   end
 
   module MCP

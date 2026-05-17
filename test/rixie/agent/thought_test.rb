@@ -29,10 +29,11 @@ class ThoughtTest < Minitest::Test
   end
 
   def test_with_returns_a_new_thought_with_tool_results_filled
+    result = Rixie::ToolExecutor::Result.new(tool_call_id: "c1", content: "ok", error: nil)
     thought = Rixie::Agent::Thought.new(type: :tool_call, content: nil, tool_calls: [], tool_results: nil)
-    updated = thought.with(tool_results: [{tool_call_id: "c1", content: "ok"}])
+    updated = thought.with(tool_results: [result])
     assert_nil thought.tool_results
-    assert_equal [{tool_call_id: "c1", content: "ok"}], updated.tool_results
+    assert_equal [result], updated.tool_results
   end
 
   def test_is_immutable

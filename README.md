@@ -23,12 +23,13 @@ gem "openai"       # for OpenAI, GitHub Models, Ollama, and other OpenAI-compati
 
 ```ruby
 Rixie.configure do |config|
-  config.default_provider  = "openai"
-  config.default_model     = "gpt-4.1-mini"
-  config.default_max_steps = 10
-  config.store             = Rixie::Store::Memory.new
-  config.logger            = Logger.new($stdout)
-  config.log_level         = :info
+  config.default_provider    = "openai"
+  config.default_model       = "gpt-4.1-mini"
+  config.default_max_steps   = 10
+  config.store               = Rixie::Store::Memory.new
+  config.logger              = Logger.new($stdout)
+  config.log_level           = :info
+  config.default_subscribers = nil  # nil → [Subscribers::Logger]; [] → no subscribers
 end
 ```
 
@@ -447,22 +448,117 @@ puts session.chat("What's my name?")
 
 `Store::Memory` keeps history in memory. Implement `Rixie::Store::Base` (`#save`, `#load`) to persist to a database or cache.
 
+## Subscribers
+
+Rixie uses a subscriber pattern for observability. By default, a `Subscribers::Logger` is attached to every session, which logs events (task start/end, LLM calls, tool calls, etc.) via the configured `logger`.
+
+### Disabling the default logger
+
+```ruby
+Rixie.configure do |config|
+  config.default_subscribers = []  # opt out of all default subscribers
+end
+```
+
+### Adding custom subscribers
+
+Implement `Rixie::Subscriber` and pass instances to `Session`. Here's an example that creates [OpenTelemetry](https://opentelemetry.io/) spans for each task and tool call:
+
+```ruby
+require "json"
+require "opentelemetry/sdk"
+
+class OpenTelemetrySubscriber < Rixie::Subscriber
+  def initialize(tracer: OpenTelemetry.tracer_provider.tracer("rixie"))
+    @tracer = tracer
+  end
+
+  def subscribe(listener)
+    task_spans = {}
+    tool_spans = {}
+
+    listener.on(Rixie::Event::TaskStart) do |envelope|
+      span = @tracer.start_span("rixie.task", attributes: {
+        "rixie.session_id"    => envelope.session_id,
+        "rixie.task_id"       => envelope.task_id,
+        "rixie.task.input"    => envelope.event.user_input,
+        "rixie.task.strategy" => envelope.event.strategy.class.name
+      })
+      ctx = OpenTelemetry::Trace.context_with_span(span)
+      task_spans[envelope.task_id] = {span: span, ctx: ctx}
+    end
+
+    listener.on(Rixie::Event::TaskEnd) do |envelope|
+      entry = task_spans.delete(envelope.task_id)
+      next unless entry
+
+      span = entry[:span]
+      if envelope.event.status == "failed"
+        span.status = OpenTelemetry::Trace::Status.error("task failed")
+      end
+      span.set_attribute("rixie.task.status", envelope.event.status)
+      span.finish
+    end
+
+    listener.on(Rixie::Event::ToolCallStart) do |envelope|
+      tc      = envelope.event.tool_call
+      task_ctx = task_spans[envelope.task_id]&.fetch(:ctx)
+      span = @tracer.start_span("rixie.tool_call",
+        with_parent: task_ctx,
+        attributes: {
+          "rixie.tool.name"      => tc.name,
+          "rixie.tool.arguments" => tc.arguments.to_json
+        }
+      )
+      tool_spans[tc.id] = span
+    end
+
+    listener.on(Rixie::Event::ToolCallEnd) do |envelope|
+      tc     = envelope.event.tool_call
+      result = envelope.event.result
+      span   = tool_spans.delete(tc.id)
+      span&.set_attribute("rixie.tool.result", result.content)
+      if result.error?
+        span&.status = OpenTelemetry::Trace::Status.error(result.error.message)
+      end
+      span&.finish
+    end
+  end
+end
+
+session = Rixie::Session.new(
+  instructions: "You are a helpful assistant.",
+  subscribers:  [OpenTelemetrySubscriber.new]
+)
+```
+
+Each event is delivered as an `Event::Envelope` that includes the domain event plus metadata:
+
+| Field | Description |
+| --- | --- |
+| `envelope.event` | The domain event object (e.g. `Event::ToolCallStart`) |
+| `envelope.session_id` | UUID of the session |
+| `envelope.task_id` | UUID of the current task |
+| `envelope.run_id` | UUID of the current run |
+| `envelope.sequence_number` | Monotonically increasing per-listener counter |
+| `envelope.event_id` | Unique UUID for this event emission |
+
 ## Streaming
 
-`Session#live` returns an `Enumerator` that yields typed event objects as the LLM generates its response.
+`Session#live` returns an `Enumerator` that yields `Event::Envelope` objects as the LLM generates its response. Pattern match on `envelope.event` to handle each event type.
 
 ```ruby
 session = Rixie::Session.new(instructions: "You are a helpful assistant.")
 
-session.live("Tell me about Ruby.").each do |event|
-  case event
+session.live("Tell me about Ruby.").each do |envelope|
+  case envelope.event
   in Rixie::Event::Token[delta:]
     print delta
     $stdout.flush
   in Rixie::Event::ToolCallStart[tool_call:]
     puts "\n[calling #{tool_call.name}...]"
   in Rixie::Event::ToolCallEnd[tool_call:, result:]
-    puts "[#{tool_call.name} → #{result[:content]}]"
+    puts "[#{tool_call.name} → #{result.content}]"
   in Rixie::Event::Finished[content:]
     puts "\n[done] #{content}"
   else
@@ -476,8 +572,8 @@ end
 | --- | --- | --- |
 | `Rixie::Event::Token` | `delta: String` | A text chunk arrives from the LLM |
 | `Rixie::Event::ToolCallStart` | `tool_call: LLM::ToolCall` | A tool call is about to execute |
-| `Rixie::Event::ToolCallEnd` | `tool_call: LLM::ToolCall`, `result: Hash` | A tool call has completed (`result` contains `:tool_call_id` and `:content`). Fires in `tool_calls` order — not completion order — even when `parallel_tool_calls: true`. |
-| `Rixie::Event::StepCompleted` | `tool_calls: Array`, `tool_results: Array` | All tool calls in one LLM iteration have completed |
+| `Rixie::Event::ToolCallEnd` | `tool_call: LLM::ToolCall`, `result: ToolExecutor::Result` | A tool call has completed. `result.content` is the tool output; `result.error?` is true if the tool raised. Fires in `tool_calls` order — not completion order — even when `parallel_tool_calls: true`. |
+| `Rixie::Event::ToolCallsCompleted` | `tool_calls: Array`, `tool_results: Array` | All tool calls in one LLM iteration have completed |
 | `Rixie::Event::ThoughtCompleted` | `thought: Thought` | The LLM returned a finish response (not emitted for tool-call iterations) |
 | `Rixie::Event::Finished` | `content: String` | The agent produces its final answer |
 
@@ -493,13 +589,13 @@ session = Rixie::Session.new(
   tools: [weather_tool]
 )
 
-session.live("What's the weather in Tokyo?").each do |event|
-  case event
+session.live("What's the weather in Tokyo?").each do |envelope|
+  case envelope.event
   in Rixie::Event::Token[delta:]          then print delta
   in Rixie::Event::ToolCallStart[tool_call:] then puts "\n[calling #{tool_call.name}...]"
-  in Rixie::Event::ToolCallEnd[tool_call:, result:] then puts "[done #{tool_call.name}: #{result[:content]}]"
+  in Rixie::Event::ToolCallEnd[tool_call:, result:] then puts "[done #{tool_call.name}: #{result.content}]"
   in Rixie::Event::Finished[content:]     then puts "\n#{content}"
-  else # ignore StepCompleted, ThoughtCompleted
+  else # ignore ToolCallsCompleted, ThoughtCompleted
   end
 end
 ```
@@ -509,8 +605,8 @@ end
 If you only need the final text, convert to an array and find `Finished`:
 
 ```ruby
-events  = session.live("Summarize Ruby in one sentence.").to_a
-output  = events.find { |e| e.is_a?(Rixie::Event::Finished) }.content
+envelopes = session.live("Summarize Ruby in one sentence.").to_a
+output    = envelopes.find { |e| e.event.is_a?(Rixie::Event::Finished) }.event.content
 ```
 
 ### Context and history
@@ -519,7 +615,7 @@ output  = events.find { |e| e.is_a?(Rixie::Event::Finished) }.content
 
 ```ruby
 session.chat("My name is Alice.")
-session.live("What's my name?").each { |e| print e.delta if e.is_a?(Rixie::Event::Token) }
+session.live("What's my name?").each { |e| print e.event.delta if e.event.is_a?(Rixie::Event::Token) }
 # streams: "Your name is Alice."
 ```
 

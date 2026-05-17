@@ -7,6 +7,10 @@ class HistoryTest < Minitest::Test
     Rixie::LLM::ToolCall.new(id: id, name: name, arguments: {})
   end
 
+  def make_result(tool_call_id:, content:)
+    Rixie::ToolExecutor::Result.new(tool_call_id: tool_call_id, content: content, error: nil)
+  end
+
   def tool_call_thought(tool_calls:, tool_results:)
     Rixie::Agent::Thought.new(type: :tool_call, content: nil, tool_calls: tool_calls, tool_results: tool_results)
   end
@@ -27,7 +31,7 @@ class HistoryTest < Minitest::Test
 
   def test_to_message_with_tool_call_thought_includes_tool_call_and_tool_result_messages
     tc = tool_call
-    thought = tool_call_thought(tool_calls: [tc], tool_results: [{tool_call_id: "c1", content: "found"}])
+    thought = tool_call_thought(tool_calls: [tc], tool_results: [make_result(tool_call_id: "c1", content: "found")])
     history = Rixie::Context::History.new(input: "q", thoughts: [thought], output: "done")
     messages = history.to_message
 
@@ -44,8 +48,8 @@ class HistoryTest < Minitest::Test
     tc1 = tool_call(id: "c1", name: "search")
     tc2 = tool_call(id: "c2", name: "lookup")
     thoughts = [
-      tool_call_thought(tool_calls: [tc1], tool_results: [{tool_call_id: "c1", content: "r1"}]),
-      tool_call_thought(tool_calls: [tc2], tool_results: [{tool_call_id: "c2", content: "r2"}])
+      tool_call_thought(tool_calls: [tc1], tool_results: [make_result(tool_call_id: "c1", content: "r1")]),
+      tool_call_thought(tool_calls: [tc2], tool_results: [make_result(tool_call_id: "c2", content: "r2")])
     ]
     history = Rixie::Context::History.new(input: "q", thoughts: thoughts, output: "ans")
     messages = history.to_message
@@ -63,7 +67,7 @@ class HistoryTest < Minitest::Test
 
   def test_assistant_message_contains_tool_call_objects
     tc = tool_call(id: "c1", name: "get_data")
-    thought = tool_call_thought(tool_calls: [tc], tool_results: [{tool_call_id: "c1", content: "data"}])
+    thought = tool_call_thought(tool_calls: [tc], tool_results: [make_result(tool_call_id: "c1", content: "data")])
     history = Rixie::Context::History.new(input: "q", thoughts: [thought], output: "done")
     messages = history.to_message
 

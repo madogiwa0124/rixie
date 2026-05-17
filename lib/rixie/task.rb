@@ -1,32 +1,40 @@
 # frozen_string_literal: true
 
+require "securerandom"
+
 module Rixie
   class Task
-    attr_reader :user_input, :agent, :context, :strategy, :runs, :status, :output
+    attr_reader :id, :user_input, :agent, :context, :strategy, :runs, :status, :output
 
-    def initialize(user_input:, agent:, context:, strategy:, silent: false)
+    def initialize(user_input:, agent:, context:, strategy:, subscribers: [], session_id: nil)
+      @id = SecureRandom.uuid
+      @session_id = session_id
       @user_input = user_input
       @agent = agent
       @context = context
       @strategy = strategy
+      @subscribers = subscribers
       @runs = []
       @status = "running"
       @output = nil
-      @silent = silent
     end
 
-    def execute(listener: nil)
-      Rixie.logger.info { "[Task] started: #{@user_input.inspect}" } unless @silent
-      listener ||= EventListener.new
+    def execute
+      listener = EventListener.new(session_id: @session_id, task_id: @id)
+      listener.on(Event::ToolCallsCompleted) { |envelope|
+        e = envelope.event
+        runs.last.add_step(tool_calls: e.tool_calls, tool_results: e.tool_results)
+      }
+      @subscribers.each { |s| s.subscribe(listener) }
+      listener.emit(Event::TaskStart.new(user_input: @user_input, strategy: @strategy))
 
       result = @strategy.run(task: self, listener:)
       @output = result
       @status = "completed"
-      Rixie.logger.info { "[Task] completed" } unless @silent
-    rescue => e
+      listener.emit(Event::TaskEnd.new(output: @output, status: @status))
+    rescue
       @status = "failed"
-      @output = e.message
-      Rixie.logger.error { "[Task] failed: #{e.message}" } unless @silent
+      listener&.emit(Event::TaskEnd.new(output: nil, status: @status))
       raise
     end
 

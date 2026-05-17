@@ -94,9 +94,11 @@ class LiveStreamingTest < Integration::TestCase
     events = session.live("Hi").to_a
 
     assert events.all? { |e|
-      e.is_a?(Rixie::Event::Token) ||
-        e.is_a?(Rixie::Event::ThoughtCompleted) ||
-        e.is_a?(Rixie::Event::Finished)
+      e.is_a?(Rixie::Event::Envelope) && (
+        e.event.is_a?(Rixie::Event::Token) ||
+          e.event.is_a?(Rixie::Event::ThoughtCompleted) ||
+          e.event.is_a?(Rixie::Event::Finished)
+      )
     }
   end
 
@@ -104,11 +106,11 @@ class LiveStreamingTest < Integration::TestCase
     session = make_session(stream_responses: [finish_response(content: "Final.")])
     events = session.live("Hi").to_a
 
-    finished = events.select { |e| e.is_a?(Rixie::Event::Finished) }
+    finished = events.select { |e| e.event.is_a?(Rixie::Event::Finished) }
     assert_equal 1, finished.size
 
     unless live?
-      assert_equal "Final.", finished.first.content
+      assert_equal "Final.", finished.first.event.content
     end
   end
 
@@ -116,15 +118,15 @@ class LiveStreamingTest < Integration::TestCase
     session = make_session(stream_responses: [finish_response(content: "Hello!")])
     events = session.live("Hi").to_a
 
-    tokens = events.select { |e| e.is_a?(Rixie::Event::Token) }
+    tokens = events.select { |e| e.event.is_a?(Rixie::Event::Token) }
 
     # At minimum one token should be emitted for non-empty content.
     # (DummyAdapter emits the full content as a single token.)
     refute_empty tokens unless live?
-    assert tokens.all? { |e| e.delta.is_a?(String) }
+    assert tokens.all? { |e| e.event.delta.is_a?(String) }
 
     unless live?
-      assert_equal "Hello!", tokens.map(&:delta).join
+      assert_equal "Hello!", tokens.map { |e| e.event.delta }.join
     end
   end
 
@@ -132,12 +134,12 @@ class LiveStreamingTest < Integration::TestCase
     session = make_session(stream_responses: [finish_response(content: "Streaming output.")])
     events = session.live("Hi").to_a
 
-    tokens = events.select { |e| e.is_a?(Rixie::Event::Token) }
-    finished = events.find { |e| e.is_a?(Rixie::Event::Finished) }
+    tokens = events.select { |e| e.event.is_a?(Rixie::Event::Token) }
+    finished = events.find { |e| e.event.is_a?(Rixie::Event::Finished) }
 
     refute_nil finished
     unless live?
-      assert_equal finished.content, tokens.map(&:delta).join
+      assert_equal finished.event.content, tokens.map { |e| e.event.delta }.join
     end
   end
 
@@ -145,12 +147,12 @@ class LiveStreamingTest < Integration::TestCase
     session = make_session(stream_responses: [finish_response(content: "Done.")])
     events = session.live("Hi").to_a
 
-    assert_instance_of Rixie::Event::Finished, events.last
+    assert_instance_of Rixie::Event::Finished, events.last.event
   end
 
   # --- tool use ---
 
-  def test_live_with_tool_use_yields_step_completed
+  def test_live_with_tool_use_yields_tool_calls_completed
     session = make_session(
       tools: [weather_tool],
       stream_responses: [
@@ -160,18 +162,20 @@ class LiveStreamingTest < Integration::TestCase
     )
     events = session.live("What's the weather in Tokyo?").to_a
 
-    step_events = events.select { |e| e.is_a?(Rixie::Event::StepCompleted) }
+    step_events = events.select { |e| e.event.is_a?(Rixie::Event::ToolCallsCompleted) }
     assert_equal 1, step_events.size
 
     unless live?
-      step = step_events.first
+      step = step_events.first.event
       assert_equal 1, step.tool_calls.size
       assert_equal "get_weather", step.tool_calls.first.name
-      assert_equal [{tool_call_id: "c1", content: "Sunny, 25°C in Tokyo"}], step.tool_results
+      r = step.tool_results.first
+      assert_equal "c1", r.tool_call_id
+      assert_equal "Sunny, 25°C in Tokyo", r.content
     end
   end
 
-  def test_live_with_tool_use_step_completed_precedes_finished
+  def test_live_with_tool_use_tool_calls_completed_precedes_finished
     session = make_session(
       tools: [weather_tool],
       stream_responses: [
@@ -181,12 +185,12 @@ class LiveStreamingTest < Integration::TestCase
     )
     events = session.live("Weather in Tokyo?").to_a
 
-    finished_index = events.index { |e| e.is_a?(Rixie::Event::Finished) }
+    finished_index = events.index { |e| e.event.is_a?(Rixie::Event::Finished) }
     refute_nil finished_index
 
     # In live mode the LLM may choose not to call the tool, so only assert ordering in dummy mode.
     unless live?
-      step_index = events.index { |e| e.is_a?(Rixie::Event::StepCompleted) }
+      step_index = events.index { |e| e.event.is_a?(Rixie::Event::ToolCallsCompleted) }
       refute_nil step_index
       assert step_index < finished_index
     end
@@ -225,10 +229,10 @@ class LiveStreamingTest < Integration::TestCase
 
     events = session.live("Please submit.").to_a
 
-    finished = events.select { |e| e.is_a?(Rixie::Event::Finished) }
+    finished = events.select { |e| e.event.is_a?(Rixie::Event::Finished) }
     assert_equal 1, finished.size
-    assert_nil finished.first.content
-    assert_instance_of Rixie::Event::Finished, events.last
+    assert_nil finished.first.event.content
+    assert_instance_of Rixie::Event::Finished, events.last.event
   end
 
   # --- strategy ---
@@ -237,6 +241,6 @@ class LiveStreamingTest < Integration::TestCase
     session = make_session(stream_responses: [finish_response(content: "Simple.")])
     events = session.live("Hi", strategy: Rixie::Strategy::Simple.new).to_a
 
-    assert events.any? { |e| e.is_a?(Rixie::Event::Finished) }
+    assert events.any? { |e| e.event.is_a?(Rixie::Event::Finished) }
   end
 end

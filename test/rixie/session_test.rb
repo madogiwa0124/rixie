@@ -289,9 +289,9 @@ class SessionTest < Minitest::Test
   def test_live_yields_event_token_events
     session = make_session_with_live([], [finish_response(content: "Hello")])
     events = session.live("hi").to_a
-    tokens = events.select { |e| e.is_a?(Rixie::Event::Token) }
+    tokens = events.select { |envelope| envelope.event.is_a?(Rixie::Event::Token) }
     refute_empty tokens
-    assert_equal "Hello", tokens.map(&:delta).join
+    assert_equal "Hello", tokens.map { |envelope| envelope.event.delta }.join
   end
 
   def test_live_yields_event_thought_completed_for_finish_thought
@@ -306,13 +306,13 @@ class SessionTest < Minitest::Test
       ])
     )
     events = session.live("hi").to_a
-    thought_events = events.select { |e| e.is_a?(Rixie::Event::ThoughtCompleted) }
-    finish_events = thought_events.select { |e| e.thought.finish? }
+    thought_events = events.select { |envelope| envelope.event.is_a?(Rixie::Event::ThoughtCompleted) }
+    finish_events = thought_events.select { |envelope| envelope.event.thought.finish? }
     assert_equal 1, finish_events.size
-    assert_equal "Done", finish_events.first.thought.content
+    assert_equal "Done", finish_events.first.event.thought.content
   end
 
-  def test_live_yields_step_completed_events_for_tool_calls
+  def test_live_yields_tool_calls_completed_events_for_tool_calls
     tool = Rixie::Tool.new(name: "search", description: "desc", input_schema: {}, call: ->(_) { "found" })
     session = Rixie::Session.new(
       instructions: "Be helpful.",
@@ -324,17 +324,17 @@ class SessionTest < Minitest::Test
       ])
     )
     events = session.live("hi").to_a
-    step_events = events.select { |e| e.is_a?(Rixie::Event::StepCompleted) }
+    step_events = events.select { |envelope| envelope.event.is_a?(Rixie::Event::ToolCallsCompleted) }
     assert_equal 1, step_events.size
-    assert_equal "search", step_events.first.tool_calls.first.name
+    assert_equal "search", step_events.first.event.tool_calls.first.name
   end
 
   def test_live_yields_event_finished_event
     session = make_session_with_live([], [finish_response(content: "Final answer")])
     events = session.live("hi").to_a
-    finished = events.select { |e| e.is_a?(Rixie::Event::Finished) }
+    finished = events.select { |envelope| envelope.event.is_a?(Rixie::Event::Finished) }
     assert_equal 1, finished.size
-    assert_equal "Final answer", finished.first.content
+    assert_equal "Final answer", finished.first.event.content
   end
 
   def test_live_appends_task_to_tasks_after_enumeration
@@ -375,8 +375,8 @@ class SessionTest < Minitest::Test
       stream_client: stream_client
     )
     events = session.live("hello").to_a
-    finished = events.find { |e| e.is_a?(Rixie::Event::Finished) }
-    assert_equal "from stream", finished.content
+    finished = events.find { |envelope| envelope.event.is_a?(Rixie::Event::Finished) }
+    assert_equal "from stream", finished.event.content
   end
 
   def test_live_does_not_execute_before_enumeration
@@ -403,5 +403,131 @@ class SessionTest < Minitest::Test
       llm_client: make_client([])
     )
     assert_equal false, session.agent.parallel_tool_calls
+  end
+
+  def test_logger_subscriber_is_added_by_default
+    session = make_session([finish_response])
+    subscribers = session.instance_variable_get(:@subscribers)
+    assert subscribers.any? { |s| s.is_a?(Rixie::Subscribers::Logger) }
+  end
+
+  def test_custom_subscribers_are_added_after_logger
+    custom_sub = Object.new
+    custom_sub.define_singleton_method(:subscribe) { |_| }
+
+    session = Rixie::Session.new(
+      instructions: "Be helpful.",
+      llm_client: make_client([]),
+      subscribers: [custom_sub]
+    )
+    subscribers = session.instance_variable_get(:@subscribers)
+    assert_equal 2, subscribers.size
+    assert_instance_of Rixie::Subscribers::Logger, subscribers.first
+    assert_same custom_sub, subscribers.last
+  end
+
+  def test_default_subscribers_empty_disables_logger
+    Rixie.config.default_subscribers = []
+    session = Rixie::Session.new(instructions: "Be helpful.", llm_client: make_client([]))
+    subscribers = session.instance_variable_get(:@subscribers)
+    refute subscribers.any? { |s| s.is_a?(Rixie::Subscribers::Logger) }
+  end
+
+  def test_subscribers_are_passed_to_task
+    received = []
+    sub = Class.new(Rixie::Subscriber) do
+      def initialize(received) = (@received = received)
+
+      def subscribe(listener)
+        listener.on(Rixie::Event::TaskStart) { |envelope| @received << envelope }
+      end
+    end.new(received)
+
+    session = Rixie::Session.new(
+      instructions: "Be helpful.",
+      llm_client: make_client([finish_response]),
+      subscribers: [sub]
+    )
+    session.chat("Hello")
+
+    assert_equal 1, received.size
+    assert_instance_of Rixie::Event::TaskStart, received.first.event
+  end
+
+  def test_live_passes_subscribers_to_task
+    received = []
+    sub = Class.new(Rixie::Subscriber) do
+      def initialize(received) = (@received = received)
+
+      def subscribe(listener)
+        listener.on(Rixie::Event::TaskStart) { |envelope| @received << envelope }
+      end
+    end.new(received)
+
+    session = Rixie::Session.new(
+      instructions: "Be helpful.",
+      llm_client: make_client([]),
+      stream_client: make_stream_client([finish_response]),
+      subscribers: [sub]
+    )
+    session.live("Hello").to_a
+
+    assert_equal 1, received.size
+    assert_instance_of Rixie::Event::TaskStart, received.first.event
+  end
+
+  def test_compress_emits_compression_start_and_end
+    received = []
+    sub = Class.new(Rixie::Subscriber) do
+      def initialize(received) = (@received = received)
+
+      def subscribe(listener)
+        listener.on(Rixie::Event::CompressionStart) { |envelope| @received << envelope }
+        listener.on(Rixie::Event::CompressionEnd) { |envelope| @received << envelope }
+      end
+    end.new(received)
+
+    session = Rixie::Session.new(
+      instructions: "Be helpful.",
+      llm_client: make_client([finish_response(content: "Turn 1"), finish_response(content: "Summary")]),
+      subscribers: [sub]
+    )
+    session.chat("Hello")
+    session.compress!
+
+    assert_equal 2, received.size
+    assert_instance_of Rixie::Event::CompressionStart, received[0].event
+    assert_equal 1, received[0].event.entry_count
+    assert_instance_of Rixie::Event::CompressionEnd, received[1].event
+    assert_equal "completed", received[1].event.status
+    assert_equal 1, received[1].event.entry_count
+  end
+
+  def test_compress_emits_compression_start_with_keep_recent
+    received = []
+    sub = Class.new(Rixie::Subscriber) do
+      def initialize(received) = (@received = received)
+
+      def subscribe(listener)
+        listener.on(Rixie::Event::CompressionStart) { |envelope| @received << envelope }
+      end
+    end.new(received)
+
+    session = Rixie::Session.new(
+      instructions: "Be helpful.",
+      llm_client: make_client([
+        finish_response(content: "Turn 1"),
+        finish_response(content: "Turn 2"),
+        finish_response(content: "Summary")
+      ]),
+      subscribers: [sub]
+    )
+    session.chat("Hello")
+    session.chat("Hello again")
+    session.compress!(keep_recent: 1)
+
+    assert_equal 1, received.size
+    assert_equal 1, received.first.event.entry_count
+    assert_equal 1, received.first.event.keep_recent
   end
 end

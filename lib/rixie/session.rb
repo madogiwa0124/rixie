@@ -6,7 +6,7 @@ module Rixie
   class Session
     attr_reader :agent, :tasks, :session_id, :stream_client
 
-    def initialize(agent: nil, stream_client: nil, instructions: nil, tools: [], model: nil, provider: nil, max_steps: nil, llm_client: nil, store: nil, initial_context: [], request_timeout: nil, max_tokens: nil, temperature: nil, token_counter: nil, parallel_tool_calls: false)
+    def initialize(agent: nil, stream_client: nil, instructions: nil, tools: [], model: nil, provider: nil, max_steps: nil, llm_client: nil, store: nil, initial_context: [], request_timeout: nil, max_tokens: nil, temperature: nil, token_counter: nil, parallel_tool_calls: false, subscribers: [])
       resolved_provider = provider || Rixie.config.default_provider
       resolved_model = model || Rixie.config.default_model
       resolved_timeout = request_timeout || Rixie.config.request_timeout
@@ -43,6 +43,8 @@ module Rixie
         stream_client
       end
 
+      default_subs = Rixie.config.default_subscribers || [Rixie::Subscribers::Logger.new(logger: Rixie.config.logger)]
+      @subscribers = default_subs + subscribers
       @store = store || Rixie.config.store || Store::Memory.new
       @token_counter = token_counter || TokenCounter::DEFAULT
       @initial_context = initial_context
@@ -52,7 +54,7 @@ module Rixie
     end
 
     def chat(user_input, strategy: Strategy::Simple.new)
-      task = Task.new(user_input: user_input, agent: agent, context: context, strategy: strategy)
+      task = Task.new(user_input: user_input, agent: agent, context: context, strategy: strategy, subscribers: @subscribers, session_id: @session_id)
       task.execute
       @tasks << task
       @store.save(@session_id, context)
@@ -62,22 +64,17 @@ module Rixie
     def live(user_input, strategy: Strategy::Simple.new)
       Enumerator.new do |yielder|
         stream_agent = @agent.with_llm_client(@stream_client)
-
-        listener = EventListener.new
-        listener.on(Event::Token) { |e| yielder << e }
-        listener.on(Event::ThoughtCompleted) { |e| yielder << e }
-        listener.on(Event::Finished) { |e| yielder << e }
-        listener.on(Event::ToolCallStart) { |e| yielder << e }
-        listener.on(Event::ToolCallEnd) { |e| yielder << e }
-        listener.on(Event::StepCompleted) { |e| yielder << e }
+        stream_sub = build_stream_subscriber(yielder)
 
         task = Task.new(
           user_input: user_input,
           agent: stream_agent,
           context: context,
-          strategy: strategy
+          strategy: strategy,
+          subscribers: @subscribers + [stream_sub],
+          session_id: @session_id
         )
-        task.execute(listener:)
+        task.execute
         @tasks << task
         @store.save(@session_id, context)
       end
@@ -100,13 +97,15 @@ module Rixie
         end
       }.join("\n\n")
 
-      Rixie.logger.info { "[Session] compressing #{to_compress.size} context entries (keep_recent: #{keep_recent})" }
+      listener = EventListener.new(session_id: @session_id)
+      @subscribers.each { |s| s.subscribe(listener) }
+      listener.emit(Event::CompressionStart.new(entry_count: to_compress.size, keep_recent: keep_recent))
+
       task = Task.new(
         user_input: summary_input,
         agent: compressor || Agent::Compressor.new(base_agent: @agent),
         context: [],
-        strategy: Strategy::Simple.new,
-        silent: true
+        strategy: Strategy::Simple.new
       )
       task.execute
 
@@ -114,6 +113,10 @@ module Rixie
       @tasks = []
       @initial_context = recent
       @store.save(@session_id, context)
+      listener.emit(Event::CompressionEnd.new(status: "completed", entry_count: context.size))
+    rescue
+      listener&.emit(Event::CompressionEnd.new(status: "failed", entry_count: nil))
+      raise
     end
 
     def context_size
@@ -123,6 +126,21 @@ module Rixie
     def context
       base = @summary ? [@summary] : []
       base + @initial_context + @tasks.select(&:completed?).flat_map(&:to_history)
+    end
+
+    private
+
+    def build_stream_subscriber(yielder)
+      sub = Object.new
+      sub.define_singleton_method(:subscribe) do |listener|
+        listener.on(Event::Token) { |envelope| yielder << envelope }
+        listener.on(Event::ThoughtCompleted) { |envelope| yielder << envelope }
+        listener.on(Event::Finished) { |envelope| yielder << envelope }
+        listener.on(Event::ToolCallStart) { |envelope| yielder << envelope }
+        listener.on(Event::ToolCallEnd) { |envelope| yielder << envelope }
+        listener.on(Event::ToolCallsCompleted) { |envelope| yielder << envelope }
+      end
+      sub
     end
   end
 end

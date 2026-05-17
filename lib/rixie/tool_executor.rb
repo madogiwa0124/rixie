@@ -2,6 +2,11 @@
 
 module Rixie
   class ToolExecutor
+    Result = Data.define(:tool_call_id, :content, :error) do
+      def success? = error.nil?
+      def error? = !error.nil?
+    end
+
     def initialize(tools: [])
       @tools = tools.each_with_object({}) { |t, h| h[t.name] = t }
     end
@@ -10,8 +15,12 @@ module Rixie
       tool = @tools[tool_call.name]
       raise Rixie::ToolNotFoundError, "Tool not found: #{tool_call.name.inspect}" if tool.nil?
 
-      result = tool.call(tool_call.arguments)
-      {tool_call_id: tool_call.id, content: result.to_s}
+      content = tool.call(tool_call.arguments)
+      Result.new(tool_call_id: tool_call.id, content: content.to_s, error: nil)
+    rescue ToolNotFoundError
+      raise # configuration bug, not a tool runtime error — let it propagate
+    rescue => e
+      Result.new(tool_call_id: tool_call.id, content: "Error: #{e.message}", error: e)
     end
 
     def return_direct?(tool_calls)

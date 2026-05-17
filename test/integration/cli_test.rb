@@ -82,7 +82,14 @@ class CLIIntegrationTest < Integration::TestCase
 
   def build_fake_session(events)
     fake = Object.new
-    fake.define_singleton_method(:live) { |_input, **_kwargs| events }
+    envelopes = events.map.with_index(1) do |event, i|
+      Rixie::Event::Envelope.new(
+        event:, occurred_at: Time.now,
+        session_id: nil, task_id: nil, run_id: nil,
+        sequence_number: i, event_id: SecureRandom.uuid
+      )
+    end
+    fake.define_singleton_method(:live) { |_input, **_kwargs| envelopes }
     fake.define_singleton_method(:context) { [] }
     fake
   end

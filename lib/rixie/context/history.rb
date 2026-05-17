@@ -18,7 +18,7 @@ module Rixie
 
           messages << Message::Assistant.new(content: nil, tool_calls: thought.tool_calls)
           thought.tool_results.each do |r|
-            messages << Message::Tool.new(tool_call_id: r[:tool_call_id], content: r[:content])
+            messages << Message::Tool.new(tool_call_id: r.tool_call_id, content: r.content)
           end
         end
 
@@ -32,7 +32,7 @@ module Rixie
             LLM::ToolCall.new(id: tc["id"], name: tc["name"], arguments: tc["arguments"])
           }
           tool_results = t["tool_results"].map { |r|
-            {tool_call_id: r["tool_call_id"], content: r["content"]}
+            ToolExecutor::Result.new(tool_call_id: r["tool_call_id"], content: r["content"], error: nil)
           }
           Agent::Thought.new(type: :tool_call, content: nil, tool_calls: tool_calls, tool_results: tool_results)
         }
@@ -49,7 +49,7 @@ module Rixie
                 {"id" => tc.id, "name" => tc.name, "arguments" => tc.arguments}
               },
               "tool_results" => t.tool_results.map { |r|
-                {"tool_call_id" => r[:tool_call_id], "content" => r[:content]}
+                {"tool_call_id" => r.tool_call_id, "content" => r.content}
               }
             }
           },

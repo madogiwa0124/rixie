@@ -20,13 +20,17 @@ class ToolExecutorTest < Minitest::Test
   def test_execute_calls_matching_tool_and_returns_result
     executor = Rixie::ToolExecutor.new(tools: [make_tool(name: "greet", result: "hello")])
     result = executor.execute(make_tool_call(id: "call_1", name: "greet"))
-    assert_equal({tool_call_id: "call_1", content: "hello"}, result)
+    assert_instance_of Rixie::ToolExecutor::Result, result
+    assert_equal "call_1", result.tool_call_id
+    assert_equal "hello", result.content
+    assert result.success?
+    refute result.error?
   end
 
   def test_execute_coerces_result_to_string
     executor = Rixie::ToolExecutor.new(tools: [make_tool(name: "count", result: 42)])
     result = executor.execute(make_tool_call(id: "call_2", name: "count"))
-    assert_equal "42", result[:content]
+    assert_equal "42", result.content
   end
 
   def test_definitions_returns_empty_array_when_no_tools
@@ -70,10 +74,20 @@ class ToolExecutorTest < Minitest::Test
     refute executor.return_direct?(calls)
   end
 
-  def test_raises_agent_error_when_tool_not_found
+  def test_raises_tool_not_found_error_when_tool_not_found
     executor = Rixie::ToolExecutor.new(tools: [])
     assert_raises(Rixie::ToolNotFoundError) do
       executor.execute(make_tool_call(id: "c1", name: "missing"))
     end
+  end
+
+  def test_execute_returns_error_result_when_tool_raises
+    boom = Rixie::Tool.new(name: "boom", description: "d", input_schema: {}, call: ->(_) { raise "kaboom" })
+    executor = Rixie::ToolExecutor.new(tools: [boom])
+    result = executor.execute(make_tool_call(id: "c1", name: "boom"))
+    assert_instance_of Rixie::ToolExecutor::Result, result
+    assert result.error?
+    assert_equal "Error: kaboom", result.content
+    assert_equal "kaboom", result.error.message
   end
 end

@@ -32,9 +32,14 @@ module Rixie
 
           content = +""
           accumulated_tool_calls = {}
+          finish_reason = nil
 
           @client.chat.completions.stream_raw(**params).each do |chunk|
-            delta = chunk.choices&.first&.delta
+            choice = chunk.choices&.first
+            next unless choice
+
+            finish_reason = choice.finish_reason if choice.finish_reason
+            delta = choice.delta
             next unless delta
 
             if (text = delta.content) && !text.empty?
@@ -54,7 +59,7 @@ module Rixie
             end
           end
 
-          Rixie::LLM::Response.from_openai_wire(build_stream_raw(content, accumulated_tool_calls))
+          Rixie::LLM::Response.from_openai_wire(build_stream_raw(content, accumulated_tool_calls, finish_reason))
         rescue ::OpenAI::Errors::Error => e
           raise Rixie::LLM::Error, e.message
         end
@@ -80,10 +85,11 @@ module Rixie
           end
         end
 
-        def build_stream_raw(content, accumulated_tool_calls)
+        def build_stream_raw(content, accumulated_tool_calls, finish_reason)
           tool_calls_raw = accumulated_tool_calls.empty? ? nil : accumulated_tool_calls.values
           {
             "choices" => [{
+              "finish_reason" => finish_reason,
               "message" => {
                 "content" => content.empty? ? nil : content,
                 "tool_calls" => tool_calls_raw

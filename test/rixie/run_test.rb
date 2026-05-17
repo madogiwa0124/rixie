@@ -82,7 +82,9 @@ class RunTest < Minitest::Test
     assert_equal 2, run.thoughts.size
     assert run.thoughts[0].tool_call?
     assert_equal "search", run.thoughts[0].tool_calls.first.name
-    assert_equal [{tool_call_id: "c1", content: "found"}], run.thoughts[0].tool_results
+    r = run.thoughts[0].tool_results.first
+    assert_equal "c1", r.tool_call_id
+    assert_equal "found", r.content
     assert run.thoughts[1].finish?
   end
 
@@ -110,7 +112,7 @@ class RunTest < Minitest::Test
     assert_equal "Answer", messages.last.content
   end
 
-  def test_listener_receives_step_completed_events_during_execute
+  def test_listener_receives_tool_calls_completed_events_during_execute
     tool = Rixie::Tool.new(name: "search", description: "s", input_schema: {}, call: ->(_) { "found" })
     agent = make_agent(
       [tool_call_response(id: "c1", name: "search"), finish_response],
@@ -119,11 +121,11 @@ class RunTest < Minitest::Test
     run = make_run(agent)
 
     received = []
-    listener.on(Rixie::Event::StepCompleted) { |e| received << e }
+    listener.on(Rixie::Event::ToolCallsCompleted) { |envelope| received << envelope }
     run.execute(listener: listener)
 
     assert_equal 1, received.size
-    assert_equal "search", received.first.tool_calls.first.name
+    assert_equal "search", received.first.event.tool_calls.first.name
   end
 
   def test_find_tool_call_returns_matching_tool_call
@@ -165,5 +167,42 @@ class RunTest < Minitest::Test
     found = run.find_tool_call("plan_done")
     assert_equal "plan_done", found.name
     assert_equal "c2", found.id
+  end
+
+  def test_execute_emits_run_start_at_beginning
+    received = []
+    listener.on(Rixie::Event::RunStart) { |envelope| received << envelope }
+
+    run = make_run(make_agent([finish_response]))
+    run.execute(listener: listener)
+
+    assert_equal 1, received.size
+    assert_equal "Hello", received.first.event.user_input
+  end
+
+  def test_execute_emits_run_end_with_completed_on_success
+    received = []
+    listener.on(Rixie::Event::RunEnd) { |envelope| received << envelope }
+
+    run = make_run(make_agent([finish_response(content: "Done")]))
+    run.execute(listener: listener)
+
+    assert_equal 1, received.size
+    assert_equal "completed", received.first.event.status
+    assert_equal "Done", received.first.event.output
+  end
+
+  def test_execute_emits_run_end_with_failed_on_failure
+    received = []
+    listener.on(Rixie::Event::RunEnd) { |envelope| received << envelope }
+
+    adapter = Rixie::LLM::Adapter::Dummy.new([])
+    client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
+    run = make_run(Rixie::Agent.new(instructions: "s", llm_client: client))
+
+    assert_raises(RuntimeError) { run.execute(listener: listener) }
+    assert_equal 1, received.size
+    assert_equal "failed", received.first.event.status
+    assert_nil received.first.event.output
   end
 end

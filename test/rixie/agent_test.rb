@@ -57,7 +57,10 @@ class AgentTest < Minitest::Test
     assert_equal "Done!", result.content
     assert_equal 2, result.thoughts.size
     assert result.thoughts[0].tool_call?
-    assert_equal [{tool_call_id: "c1", content: "ruby docs"}], result.thoughts[0].tool_results
+    r = result.thoughts[0].tool_results.first
+    assert_equal "c1", r.tool_call_id
+    assert_equal "ruby docs", r.content
+    assert r.success?
     assert result.thoughts[1].finish?
   end
 
@@ -73,7 +76,7 @@ class AgentTest < Minitest::Test
 
   def test_think_does_not_emit_thought_completed_for_tool_call_thought
     received = []
-    listener.on(Rixie::Event::ThoughtCompleted) { |e| received << e }
+    listener.on(Rixie::Event::ThoughtCompleted) { |envelope| received << envelope }
 
     tool = simple_tool(name: "get_weather", result: "sunny")
     agent = make_agent(
@@ -82,30 +85,30 @@ class AgentTest < Minitest::Test
     )
     agent.think(messages: [], listener: listener)
 
-    tool_call_events = received.select { |e| e.thought.tool_call? }
+    tool_call_events = received.select { |envelope| envelope.event.thought.tool_call? }
     assert_empty tool_call_events
   end
 
   def test_think_emits_thought_completed_for_finish_thought
     received = []
-    listener.on(Rixie::Event::ThoughtCompleted) { |e| received << e }
+    listener.on(Rixie::Event::ThoughtCompleted) { |envelope| received << envelope }
 
     agent = make_agent([finish_response(content: "All done")])
     agent.think(messages: [], listener: listener)
 
-    finish_event = received.find { |e| e.thought.finish? }
+    finish_event = received.find { |envelope| envelope.event.thought.finish? }
     refute_nil finish_event
-    assert_equal "All done", finish_event.thought.content
+    assert_equal "All done", finish_event.event.thought.content
   end
 
   def test_think_emits_finished_with_content
     received = nil
-    listener.on(Rixie::Event::Finished) { |e| received = e }
+    listener.on(Rixie::Event::Finished) { |envelope| received = envelope }
 
     agent = make_agent([finish_response(content: "All done")])
     agent.think(messages: [], listener: listener)
 
-    assert_equal "All done", received.content
+    assert_equal "All done", received.event.content
   end
 
   def test_think_raises_max_steps_exceeded_on_next_tool_call_after_budget
@@ -158,11 +161,11 @@ class AgentTest < Minitest::Test
     agent = make_agent([tool_call_response(id: "c1", name: "submit")], tools: [direct_tool])
 
     received = nil
-    listener.on(Rixie::Event::Finished) { |e| received = e }
+    listener.on(Rixie::Event::Finished) { |envelope| received = envelope }
     agent.think(messages: [], listener: listener)
 
     refute_nil received
-    assert_nil received.content
+    assert_nil received.event.content
   end
 
   def test_think_emits_finished_as_the_last_event
@@ -173,11 +176,11 @@ class AgentTest < Minitest::Test
     )
 
     events = []
-    listener.on(Rixie::Event::ThoughtCompleted) { |e| events << e }
-    listener.on(Rixie::Event::Finished) { |e| events << e }
+    listener.on(Rixie::Event::ThoughtCompleted) { |envelope| events << envelope }
+    listener.on(Rixie::Event::Finished) { |envelope| events << envelope }
     agent.think(messages: [], listener: listener)
 
-    assert_instance_of Rixie::Event::Finished, events.last
+    assert_instance_of Rixie::Event::Finished, events.last.event
   end
 
   def test_think_appends_tool_call_and_tool_result_messages_to_messages
@@ -203,30 +206,25 @@ class AgentTest < Minitest::Test
     assert_raises(NoMethodError) { agent.llm_call(messages: [], listener: listener) }
   end
 
-  def test_think_logs_warning_when_response_is_truncated
-    log_output = StringIO.new
-    Rixie.config.logger = Logger.new(log_output)
-
+  def test_think_raises_response_truncated_error_when_finish_reason_is_length
     truncated = {"choices" => [{"finish_reason" => "length", "message" => {"content" => "cut off...", "tool_calls" => nil}}]}
     agent = make_agent([truncated])
-    agent.think(messages: [], listener: listener)
-
-    assert_match "finish_reason=length", log_output.string
+    assert_raises(Rixie::LLM::ResponseTruncatedError) do
+      agent.think(messages: [], listener: listener)
+    end
   end
 
-  def test_think_does_not_log_warning_for_normal_finish
-    log_output = StringIO.new
-    Rixie.config.logger = Logger.new(log_output)
-
-    agent = make_agent([finish_response])
-    agent.think(messages: [], listener: listener)
-
-    refute_match "finish_reason=length", log_output.string
+  def test_think_raises_response_truncated_error_in_stream_mode
+    truncated = {"choices" => [{"finish_reason" => "length", "message" => {"content" => "cut off...", "tool_calls" => nil}}]}
+    agent = make_agent([truncated], stream: true)
+    assert_raises(Rixie::LLM::ResponseTruncatedError) do
+      agent.think(messages: [], listener: listener)
+    end
   end
 
   def test_think_emits_event_token_when_stream_client_is_used
     tokens = []
-    listener.on(Rixie::Event::Token) { |e| tokens << e.delta }
+    listener.on(Rixie::Event::Token) { |envelope| tokens << envelope.event.delta }
 
     agent = make_agent([finish_response(content: "streamed!")], stream: true)
     agent.think(messages: [], listener: listener)
@@ -249,7 +247,7 @@ class AgentTest < Minitest::Test
 
   def test_think_emits_tool_call_start_for_each_tool_call_before_execution
     received = []
-    listener.on(Rixie::Event::ToolCallStart) { |e| received << e }
+    listener.on(Rixie::Event::ToolCallStart) { |envelope| received << envelope }
 
     tool = simple_tool(name: "get_weather", result: "sunny")
     agent = make_agent(
@@ -259,13 +257,13 @@ class AgentTest < Minitest::Test
     agent.think(messages: [], listener: listener)
 
     assert_equal 1, received.size
-    assert_equal "get_weather", received.first.tool_call.name
-    assert_equal "c1", received.first.tool_call.id
+    assert_equal "get_weather", received.first.event.tool_call.name
+    assert_equal "c1", received.first.event.tool_call.id
   end
 
   def test_think_emits_tool_call_end_for_each_tool_call_after_execution
     received = []
-    listener.on(Rixie::Event::ToolCallEnd) { |e| received << e }
+    listener.on(Rixie::Event::ToolCallEnd) { |envelope| received << envelope }
 
     tool = simple_tool(name: "get_weather", result: "sunny")
     agent = make_agent(
@@ -275,13 +273,16 @@ class AgentTest < Minitest::Test
     agent.think(messages: [], listener: listener)
 
     assert_equal 1, received.size
-    assert_equal "get_weather", received.first.tool_call.name
-    assert_equal({tool_call_id: "c1", content: "sunny"}, received.first.result)
+    assert_equal "get_weather", received.first.event.tool_call.name
+    r = received.first.event.result
+    assert_equal "c1", r.tool_call_id
+    assert_equal "sunny", r.content
+    assert r.success?
   end
 
-  def test_think_emits_step_completed_after_all_tool_calls_complete
+  def test_think_emits_tool_calls_completed_after_all_tool_calls_complete
     received = []
-    listener.on(Rixie::Event::StepCompleted) { |e| received << e }
+    listener.on(Rixie::Event::ToolCallsCompleted) { |envelope| received << envelope }
 
     tool = simple_tool(name: "get_weather", result: "sunny")
     agent = make_agent(
@@ -291,14 +292,16 @@ class AgentTest < Minitest::Test
     agent.think(messages: [], listener: listener)
 
     assert_equal 1, received.size
-    assert_equal 1, received.first.tool_calls.size
-    assert_equal [{tool_call_id: "c1", content: "sunny"}], received.first.tool_results
+    assert_equal 1, received.first.event.tool_calls.size
+    r = received.first.event.tool_results.first
+    assert_equal "c1", r.tool_call_id
+    assert_equal "sunny", r.content
   end
 
   def test_think_emits_tool_call_start_before_tool_call_end
     events = []
-    listener.on(Rixie::Event::ToolCallStart) { |e| events << e }
-    listener.on(Rixie::Event::ToolCallEnd) { |e| events << e }
+    listener.on(Rixie::Event::ToolCallStart) { |envelope| events << envelope }
+    listener.on(Rixie::Event::ToolCallEnd) { |envelope| events << envelope }
 
     tool = simple_tool(name: "get_weather", result: "sunny")
     agent = make_agent(
@@ -308,8 +311,8 @@ class AgentTest < Minitest::Test
     agent.think(messages: [], listener: listener)
 
     assert_equal 2, events.size
-    assert_instance_of Rixie::Event::ToolCallStart, events[0]
-    assert_instance_of Rixie::Event::ToolCallEnd, events[1]
+    assert_instance_of Rixie::Event::ToolCallStart, events[0].event
+    assert_instance_of Rixie::Event::ToolCallEnd, events[1].event
   end
 
   def test_think_with_parallel_tool_calls_executes_concurrently
@@ -384,8 +387,31 @@ class AgentTest < Minitest::Test
     assert_equal [:a, :b], order
   end
 
-  def test_think_with_parallel_tool_calls_raises_when_a_tool_raises
+  def test_think_emits_tool_call_end_with_error_content_when_tool_raises
     boom_tool = Rixie::Tool.new(name: "boom", description: "d", input_schema: {}, call: ->(_) { raise "tool failed" })
+
+    received = []
+    listener.on(Rixie::Event::ToolCallEnd) { |envelope| received << envelope }
+
+    responses = [
+      tool_call_response(id: "c1", name: "boom"),
+      finish_response
+    ]
+
+    agent = make_agent(responses, tools: [boom_tool])
+    agent.think(messages: [], listener: listener)
+
+    assert_equal 1, received.size
+    assert_equal "c1", received.first.event.tool_call.id
+    assert_equal "Error: tool failed", received.first.event.result.content
+    assert received.first.event.result.error?
+  end
+
+  def test_think_parallel_emits_tool_call_end_for_all_tools_when_some_raise
+    boom_tool = Rixie::Tool.new(name: "boom", description: "d", input_schema: {}, call: ->(_) { raise "tool failed" })
+
+    received = []
+    listener.on(Rixie::Event::ToolCallEnd) { |envelope| received << envelope }
 
     responses = [
       {
@@ -398,41 +424,18 @@ class AgentTest < Minitest::Test
             ]
           }
         }]
-      }
+      },
+      finish_response
     ]
 
     agent = make_agent(responses, tools: [boom_tool], parallel_tool_calls: true)
-    err = assert_raises(RuntimeError) { agent.think(messages: [], listener: listener) }
-    assert_equal "tool failed", err.message
-  end
+    agent.think(messages: [], listener: listener)
 
-  def test_think_with_parallel_tool_calls_all_threads_finish_before_raising
-    finished = []
-    latch = Mutex.new
-
-    slow_boom_tool = Rixie::Tool.new(name: "slow_boom", description: "d", input_schema: {}, call: ->(_) {
-      sleep(0.05)
-      latch.synchronize { finished << Thread.current.object_id }
-      raise "tool failed"
-    })
-
-    responses = [
-      {
-        "choices" => [{
-          "message" => {
-            "content" => nil,
-            "tool_calls" => [
-              {"id" => "c1", "function" => {"name" => "slow_boom", "arguments" => "{}"}},
-              {"id" => "c2", "function" => {"name" => "slow_boom", "arguments" => "{}"}}
-            ]
-          }
-        }]
-      }
-    ]
-
-    agent = make_agent(responses, tools: [slow_boom_tool], parallel_tool_calls: true)
-    assert_raises(RuntimeError) { agent.think(messages: [], listener: listener) }
-    assert_equal 2, finished.size
+    assert_equal 2, received.size
+    assert_equal "Error: tool failed", received[0].event.result.content
+    assert_equal "Error: tool failed", received[1].event.result.content
+    assert received[0].event.result.error?
+    assert received[1].event.result.error?
   end
 
   def test_with_llm_client_preserves_parallel_tool_calls
@@ -441,5 +444,32 @@ class AgentTest < Minitest::Test
     new_agent = agent.with_llm_client(new_client)
 
     assert_equal true, new_agent.parallel_tool_calls
+  end
+
+  def test_think_emits_llm_call_start_before_each_llm_call
+    received = []
+    listener.on(Rixie::Event::LlmCallStart) { |envelope| received << envelope }
+
+    agent = make_agent([finish_response(content: "Done")])
+    agent.think(messages: [], listener: listener)
+
+    assert_equal 1, received.size
+    assert_equal 1, received.first.event.step_count
+  end
+
+  def test_think_llm_call_start_step_count_increments_across_tool_call_loops
+    received = []
+    listener.on(Rixie::Event::LlmCallStart) { |envelope| received << envelope }
+
+    tool = simple_tool(name: "search", result: "ok")
+    agent = make_agent(
+      [tool_call_response(id: "c1", name: "search"), finish_response],
+      tools: [tool]
+    )
+    agent.think(messages: [], listener: listener)
+
+    assert_equal 2, received.size
+    assert_equal 1, received[0].event.step_count
+    assert_equal 2, received[1].event.step_count
   end
 end

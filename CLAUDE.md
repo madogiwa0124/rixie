@@ -65,8 +65,6 @@ Task     × N → Session  # Entire conversation
 
 **Rixie::EventListener** — Instance-based pub/sub (not global). Scoped to a single Task lifecycle to prevent cross-talk between concurrent sessions. Used for external observability (e.g. streaming, logging) — internal state flows through return values, not events.
 
-- Events emitted by Agent: `Event::ToolCallStart` `{ tool_call: }` (fires once per tool call, before execution), `Event::ToolCallEnd` `{ tool_call:, result: }` (fires once per tool call, after execution — in `tool_calls` order even in parallel mode), `Event::StepCompleted` `{ tool_calls:, tool_results: }` (fires after all tool calls in a single `:tool_call` iteration complete), `Event::ThoughtCompleted` `{ thought: }` (fires only for `:finish` thoughts — not for `:tool_call` iterations), `Event::Finished` `{ content: String | nil }` (Run-terminal singleton — always fires exactly once when `Agent#think` returns, regardless of exit path), `Event::Token` `{ delta: }` (streaming).
-- Firing order invariant within a `:tool_call` iteration: `ToolCallStart` × N (sequential, all before any execution) → tool execution (parallel or sequential) → `ToolCallEnd` × N (sequential, in `tool_calls` order) → `StepCompleted`. Across the whole Run, `Finished` is always the last event (`content` is nil on the `return_direct` exit path). `ThoughtCompleted` fires only on the `:finish` path, immediately before `Finished`.
 
 **Rixie::LLM::Client** — HTTP communication. Resolves provider via `Client::Resolver` on initialization.
 
@@ -136,9 +134,10 @@ Rixie.configure do |config|
   config.default_model       = "gpt-4.1-mini"
   config.default_max_tokens  = nil
   config.default_temperature = nil
-  config.store     = Rixie::Store::Memory
-  config.logger    = Logger.new($stdout)
-  config.log_level = :info                       # RIXIE_LOG_LEVEL
+  config.store               = Rixie::Store::Memory
+  config.logger              = Logger.new($stdout)
+  config.log_level           = :info                       # RIXIE_LOG_LEVEL
+  config.default_subscribers = nil                         # nil → [Subscribers::Logger]; [] → no subscribers
 
   config.register_provider("my_proxy",
     adapter:  :openai,
@@ -189,3 +188,4 @@ test/support/dummy_adapter.rb  # Inject fake LLM responses in tests
 @.claude/rules/testing.md
 @.claude/rules/adapter.md
 @.claude/rules/cli.md
+@.claude/rules/events.md

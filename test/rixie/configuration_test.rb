@@ -44,6 +44,16 @@ class ConfigurationTest < Minitest::Test
     assert_instance_of Logger, Rixie.config.logger
   end
 
+  def test_default_log_level_is_applied_to_logger
+    assert_equal Logger::INFO, Rixie.config.logger.level
+  end
+
+  def test_log_level_setter_updates_logger_level
+    Rixie.config.log_level = :debug
+    assert_equal :debug, Rixie.config.log_level
+    assert_equal Logger::DEBUG, Rixie.config.logger.level
+  end
+
   def test_default_store_is_nil
     assert_nil Rixie.config.store
   end

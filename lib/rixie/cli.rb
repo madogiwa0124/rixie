@@ -117,9 +117,7 @@ module Rixie
     end
 
     def run
-      unless @options[:debug]
-        Rixie.config.logger = Logger.new(File::NULL)
-      end
+      Rixie.config.logger.reopen(@options[:debug] ? $stderr : File::NULL)
 
       provider = @options[:provider] || Rixie.config.default_provider
       model = @options[:model] || Rixie.config.default_model
@@ -211,8 +209,8 @@ module Rixie
       tool_section_started = false
       renderer.start_spinner
 
-      session.live(input, strategy: current_strategy).each do |event|
-        case event
+      session.live(input, strategy: current_strategy).each do |envelope|
+        case envelope.event
         in Rixie::Event::Token[delta:]
           renderer.stop_spinner
           renderer.stream_token(delta)
@@ -228,7 +226,7 @@ module Rixie
         in Rixie::Event::ToolCallEnd[tool_call:, result:]
           renderer.render_tool_call_end(tool_call, result)
 
-        in Rixie::Event::StepCompleted
+        in Rixie::Event::ToolCallsCompleted
           renderer.print_agent_prefix
           renderer.start_spinner
 

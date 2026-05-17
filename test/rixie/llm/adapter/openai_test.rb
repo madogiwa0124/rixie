@@ -32,13 +32,13 @@ class OpenAIAdapterTest < Minitest::Test
 
   # Builds a fake ChatCompletionChunk from a hash: { content:, tool_calls: [...] }
   # tool_calls entry: { index:, id:, name:, arguments: }
-  def make_chunk(content: nil, tool_calls: nil)
+  def make_chunk(content: nil, tool_calls: nil, finish_reason: nil)
     tc_structs = tool_calls&.map do |tc|
       fn = Struct.new(:name, :arguments).new(tc[:name], tc[:arguments])
       Struct.new(:index, :id, :function).new(tc[:index], tc[:id], fn)
     end
     delta = Struct.new(:content, :tool_calls).new(content, tc_structs)
-    choice = Struct.new(:delta).new(delta)
+    choice = Struct.new(:delta, :finish_reason).new(delta, finish_reason)
     Struct.new(:choices).new([choice])
   end
 
@@ -158,5 +158,18 @@ class OpenAIAdapterTest < Minitest::Test
     assert_instance_of Rixie::LLM::Response, response
     assert_equal "Hello there", response.content
     refute response.has_tool_calls?
+  end
+
+  def test_stream_captures_finish_reason_from_final_chunk
+    adapter = build_adapter
+    chunks = [
+      make_chunk(content: "cut off..."),
+      make_chunk(finish_reason: "length")
+    ]
+    stub_stream_client(adapter, chunks: chunks)
+
+    response = adapter.stream([], tools: []) { |_| }
+
+    assert_equal "length", response.finish_reason
   end
 end

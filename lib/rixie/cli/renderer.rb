@@ -107,7 +107,7 @@ module Rixie
           result = thought.tool_results[i]
           frame(fmt("{{*}} Tool: #{@terminal.bold(tc.name)}"), color: :cyan) do
             format_tool_args(tc.arguments).each { |line| puts line }
-            puts_indented("#{@terminal.bold("Result:")} #{result[:content].to_s.lines.first&.chomp}")
+            puts_indented("#{@terminal.bold("Result:")} #{result.content.to_s.lines.first&.chomp}")
           end
         end
       end
@@ -119,7 +119,7 @@ module Rixie
       def render_tool_call_end(tool_call, result)
         frame(fmt("{{*}} Tool: #{@terminal.bold(tool_call.name)}"), color: :cyan) do
           format_tool_args(tool_call.arguments).each { |line| puts line }
-          puts_indented("#{@terminal.bold("Result:")} #{result[:content].to_s.lines.first&.chomp}")
+          puts_indented("#{@terminal.bold("Result:")} #{result.content.to_s.lines.first&.chomp}")
         end
       end
 

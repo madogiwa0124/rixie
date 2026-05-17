@@ -35,27 +35,24 @@ module Rixie
     def think(messages:, listener:)
       thoughts = []
       tool_call_count = 0
+      step_count = 0
 
       loop do
-        Rixie.logger.info { "[Agent] llm_call ##{thoughts.size + 1}" }
-        thought = llm_call(messages:, listener:)
+        step_count += 1
+        listener.emit(Event::LlmCallStart.new(step_count: step_count))
+        thought = llm_call(messages:) { |event| listener.emit(event) }
 
         if thought.tool_call?
           raise MaxStepsExceededError, "Max steps (#{@max_steps}) exceeded" if tool_call_count >= @max_steps
           tool_call_count += 1
-          thought.tool_calls.each do |tc|
-            Rixie.logger.info { "[Agent] tool_call: #{tc.name}(#{tc.arguments})" }
-            listener.emit(Event::ToolCallStart.new(tool_call: tc))
-          end
+          results = call_thought_tools(
+            on_start: ->(tc) { listener.emit(Event::ToolCallStart.new(tool_call: tc)) },
+            thought: thought,
+            on_end: ->(tc, result) { listener.emit(Event::ToolCallEnd.new(tool_call: tc, result: result)) },
+            parallel: @parallel_tool_calls
+          )
 
-          results = map_tool_calls(thought.tool_calls) { |tc| @tool_executor.execute(tc) }
-
-          thought.tool_calls.zip(results).each do |tc, result|
-            Rixie.logger.info { "[Agent] tool_result: #{result[:content].inspect}" }
-            listener.emit(Event::ToolCallEnd.new(tool_call: tc, result: result))
-          end
-
-          listener.emit(Event::StepCompleted.new(tool_calls: thought.tool_calls, tool_results: results))
+          listener.emit(Event::ToolCallsCompleted.new(tool_calls: thought.tool_calls, tool_results: results))
 
           thought = record_thought(thoughts, thought, results)
           append_thought_messages(messages, thought)
@@ -66,7 +63,6 @@ module Rixie
           end
         elsif thought.finish?
           thoughts << thought
-          Rixie.logger.info { "[Agent] finish: #{thought.content.inspect}" }
           listener.emit(Event::ThoughtCompleted.new(thought: thought))
           listener.emit(Event::Finished.new(content: thought.content))
           return ThinkResult.new(content: thought.content, thoughts: thoughts)
@@ -78,8 +74,11 @@ module Rixie
 
     private
 
-    def map_tool_calls(tool_calls, &block)
-      @parallel_tool_calls ? concurrent_map(tool_calls, &block) : tool_calls.map(&block)
+    def call_thought_tools(on_start:, thought:, on_end:, parallel:)
+      thought.tool_calls.each { |tc| on_start.call(tc) }
+      results = parallel ? concurrent_map(thought.tool_calls) { |tc| @tool_executor.execute(tc) } : thought.tool_calls.map { |tc| @tool_executor.execute(tc) }
+      thought.tool_calls.zip(results).each { |tc, result| on_end.call(tc, result) }
+      results
     end
 
     def concurrent_map(items, &block)
@@ -107,14 +106,12 @@ module Rixie
 
     def append_thought_messages(messages, thought)
       messages << Message::Assistant.new(content: nil, tool_calls: thought.tool_calls)
-      thought.tool_results.each { |r| messages << Message::Tool.new(tool_call_id: r[:tool_call_id], content: r[:content]) }
+      thought.tool_results.each { |r| messages << Message::Tool.new(tool_call_id: r.tool_call_id, content: r.content) }
     end
 
-    def llm_call(messages:, listener:)
-      response = @llm_client.call(messages, tools: @tool_executor.definitions) { |event| listener.emit(event) }
-      if response.finish_reason == "length"
-        Rixie.logger.warn { "[Agent] LLM response truncated (finish_reason=length)" }
-      end
+    def llm_call(messages:, &on_event)
+      response = @llm_client.call(messages, tools: @tool_executor.definitions) { |event| on_event.call(event) }
+      raise LLM::ResponseTruncatedError, "LLM response truncated (finish_reason=length)" if response.finish_reason == "length"
       if response.has_tool_calls?
         Thought.new(type: :tool_call, content: nil, tool_calls: response.tool_calls, tool_results: nil)
       else

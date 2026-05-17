@@ -1,8 +1,16 @@
 # frozen_string_literal: true
 
+require "rixie/event/envelope"
 require "rixie/event/token"
 require "rixie/event/thought_completed"
 require "rixie/event/finished"
 require "rixie/event/tool_call_start"
 require "rixie/event/tool_call_end"
-require "rixie/event/step_completed"
+require "rixie/event/tool_calls_completed"
+require "rixie/event/llm_call_start"
+require "rixie/event/run_start"
+require "rixie/event/run_end"
+require "rixie/event/task_start"
+require "rixie/event/task_end"
+require "rixie/event/compression_start"
+require "rixie/event/compression_end"

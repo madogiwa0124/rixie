@@ -114,4 +114,107 @@ class TaskTest < Minitest::Test
     histories = task.to_history
     assert_equal 1, histories.size
   end
+
+  def test_execute_emits_task_start_before_strategy_runs
+    order = []
+    strategy = Object.new
+    strategy.define_singleton_method(:run) do |task:, listener:|
+      order << :strategy_ran
+      "output"
+    end
+
+    sub = Class.new(Rixie::Subscriber) do
+      def initialize(order) = (@order = order)
+
+      def subscribe(listener)
+        listener.on(Rixie::Event::TaskStart) { |_| @order << :task_start }
+      end
+    end.new(order)
+
+    task = Rixie::Task.new(
+      user_input: "Hello", agent: make_agent([]), context: [],
+      strategy: strategy, subscribers: [sub]
+    )
+    task.execute
+
+    assert_equal [:task_start, :strategy_ran], order
+  end
+
+  def test_execute_emits_task_end_with_completed_on_success
+    received = []
+    sub = Class.new(Rixie::Subscriber) do
+      def initialize(received) = (@received = received)
+
+      def subscribe(listener)
+        listener.on(Rixie::Event::TaskEnd) { |envelope| @received << envelope }
+      end
+    end.new(received)
+
+    task = Rixie::Task.new(
+      user_input: "Hello", agent: make_agent([finish_response]),
+      context: [], strategy: Rixie::Strategy::Simple.new,
+      subscribers: [sub]
+    )
+    task.execute
+
+    assert_equal 1, received.size
+    assert_equal "completed", received.first.event.status
+    assert_equal "Done!", received.first.event.output
+  end
+
+  def test_execute_emits_task_end_with_failed_on_failure
+    received = []
+    sub = Class.new(Rixie::Subscriber) do
+      def initialize(received) = (@received = received)
+
+      def subscribe(listener)
+        listener.on(Rixie::Event::TaskEnd) { |envelope| @received << envelope }
+      end
+    end.new(received)
+
+    adapter = Rixie::LLM::Adapter::Dummy.new([])
+    client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
+    agent = Rixie::Agent.new(instructions: "s", llm_client: client)
+    task = Rixie::Task.new(
+      user_input: "Hello", agent: agent, context: [],
+      strategy: Rixie::Strategy::Simple.new, subscribers: [sub]
+    )
+
+    assert_raises(RuntimeError) { task.execute }
+    assert_equal 1, received.size
+    assert_equal "failed", received.first.event.status
+    assert_nil received.first.event.output
+  end
+
+  def test_subscribers_defaults_to_empty
+    task = Rixie::Task.new(
+      user_input: "Hello", agent: make_agent([finish_response]),
+      context: [], strategy: Rixie::Strategy::Simple.new
+    )
+    task.execute
+    assert task.completed?
+  end
+
+  def test_custom_subscriber_receives_events_during_execute
+    received = []
+    sub = Class.new(Rixie::Subscriber) do
+      def initialize(received) = (@received = received)
+
+      def subscribe(listener)
+        listener.on(Rixie::Event::TaskStart) { |envelope| @received << envelope }
+        listener.on(Rixie::Event::TaskEnd) { |envelope| @received << envelope }
+      end
+    end.new(received)
+
+    task = Rixie::Task.new(
+      user_input: "Hello", agent: make_agent([finish_response]),
+      context: [], strategy: Rixie::Strategy::Simple.new,
+      subscribers: [sub]
+    )
+    task.execute
+
+    assert_equal 2, received.size
+    assert_instance_of Rixie::Event::TaskStart, received[0].event
+    assert_instance_of Rixie::Event::TaskEnd, received[1].event
+  end
 end
