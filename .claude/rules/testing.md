@@ -101,6 +101,16 @@ Do not add logic to fake gems. They exist only to satisfy `require` at load time
 
 Do **not** reach into internal objects (e.g. `run.steps`) in unit tests of other classes — that is integration territory.
 
+## Required: Tests for Public Interface Changes
+
+The following always require a test — no exceptions:
+
+- **New public method** — at minimum one test covering the happy path and one for each error/edge case
+- **Behavior change to an existing public method** — update or add tests that cover the new behavior; remove tests that assert the old behavior
+- **New event emission** — add a test that subscribes to the event and asserts it fires with the expected payload
+
+These are non-negotiable. Skipping them is a bug in the development process, not a time-saving measure.
+
 ## What NOT to Do
 
 ```ruby
