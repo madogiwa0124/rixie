@@ -87,7 +87,7 @@ class MCPTest < Integration::TestCase
       assert_equal "The current time in Asia/Tokyo is 12:00.", output
       thought = task.runs.first.thoughts.find(&:tool_call?)
       assert_equal "get_time", thought.tool_calls.first.name
-      assert_equal "Current time in Asia/Tokyo via get_time: 12:00", thought.tool_results.first[:content]
+      assert_equal "Current time in Asia/Tokyo via get_time: 12:00", thought.tool_results.first.content
     end
   end
 

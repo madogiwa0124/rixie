@@ -73,14 +73,14 @@ class SmokeTest < Integration::TestCase
     )
 
     events = session.live("Say hello.").to_a
-    tokens = events.select { |e| e.is_a?(Rixie::Event::Token) }
-    finished = events.find { |e| e.is_a?(Rixie::Event::Finished) }
+    tokens = events.select { |e| e.is_a?(Rixie::Event::Envelope) && e.event.is_a?(Rixie::Event::Token) }
+    finished = events.find { |e| e.is_a?(Rixie::Event::Envelope) && e.event.is_a?(Rixie::Event::Finished) }
 
-    assert_instance_of Rixie::Event::Finished, finished
-    refute_empty finished.content
+    assert_instance_of Rixie::Event::Envelope, finished
+    refute_empty finished.event.content
     refute_empty tokens unless live? # dummy emits 1 token; real LLM may vary
     assert session.tasks.first.completed?
-    assert_equal "Hello!", finished.content unless live?
+    assert_equal "Hello!", finished.event.content unless live?
   end
 
   # --- PlanExecute strategy ---

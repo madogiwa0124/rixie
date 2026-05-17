@@ -43,7 +43,7 @@ class ToolUseTest < Integration::TestCase
       tool_thoughts = run.thoughts.select(&:tool_call?)
       assert_equal 1, tool_thoughts.size
       assert_equal "get_weather", tool_thoughts.first.tool_calls.first.name
-      assert_equal "Sunny, 25°C in Tokyo", tool_thoughts.first.tool_results.first[:content]
+      assert_equal "Sunny, 25°C in Tokyo", tool_thoughts.first.tool_results.first.content
     end
   end
 
