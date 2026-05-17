@@ -30,6 +30,7 @@ Rixie.configure do |config|
   config.logger              = Logger.new($stdout)
   config.log_level           = :info
   config.default_subscribers = nil  # nil → [Subscribers::Logger]; [] → no subscribers
+                                    # nil means "unset — use the built-in default"; [] means "explicitly opt out"
 end
 ```
 
@@ -589,7 +590,7 @@ Each event is delivered as an `Event::Envelope` that includes the domain event p
 
 ## Streaming
 
-`Session#live` returns an `Enumerator` that yields `Event::Envelope` objects as the LLM generates its response. Pattern match on `envelope.event` to handle each event type.
+`Session#live` returns an `Enumerator` that yields `Event::Envelope` objects as the LLM generates its response. Pattern match on `envelope.event` to handle each event type. These are the same events delivered to subscribers — `live` and `subscribe` share the same event bus.
 
 ```ruby
 session = Rixie::Session.new(instructions: "You are a helpful assistant.")
@@ -616,7 +617,7 @@ end
 | --- | --- | --- |
 | `Rixie::Event::Token` | `delta: String` | A text chunk arrives from the LLM |
 | `Rixie::Event::ToolCallStart` | `tool_call: LLM::ToolCall` | A tool call is about to execute |
-| `Rixie::Event::ToolCallEnd` | `tool_call: LLM::ToolCall`, `result: ToolExecutor::Result` | A tool call has completed. `result.content` is the tool output; `result.error?` is true if the tool raised. Fires in `tool_calls` order — not completion order — even when `parallel_tool_calls: true`. |
+| `Rixie::Event::ToolCallEnd` | `tool_call: LLM::ToolCall`, `result: ToolExecutor::Result` | A tool call has completed. `result.content` is the tool output; `result.error?` is true if the tool raised — the error is returned to the LLM as the tool result and the agent continues its loop. Fires in `tool_calls` order — not completion order — even when `parallel_tool_calls: true`. |
 | `Rixie::Event::ToolCallsCompleted` | `tool_calls: Array`, `tool_results: Array` | All tool calls in one LLM iteration have completed |
 | `Rixie::Event::ThoughtCompleted` | `thought: Thought` | The LLM returned a finish response (not emitted for tool-call iterations) |
 | `Rixie::Event::Finished` | `content: String` | The agent produces its final answer |
