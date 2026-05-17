@@ -7,7 +7,7 @@ module Rixie
     class Client
       attr_reader :model, :provider
 
-      def initialize(model: nil, provider: nil, adapter: nil, stream: false, request_timeout: nil, max_tokens: nil, temperature: nil)
+      def initialize(model: nil, provider: nil, adapter: nil, stream: false, request_timeout: nil, max_tokens: nil, temperature: nil, parallel_tool_calls: nil)
         @model = model
         @provider = provider
         @stream = stream
@@ -16,7 +16,8 @@ module Rixie
           provider: provider,
           request_timeout: request_timeout,
           max_tokens: max_tokens,
-          temperature: temperature
+          temperature: temperature,
+          parallel_tool_calls: parallel_tool_calls
         )
       end
 

@@ -11,12 +11,13 @@ module Rixie
 
     DEFAULT_MAX_STEPS = 10
 
-    attr_reader :instructions, :tools, :llm_client
+    attr_reader :instructions, :tools, :llm_client, :parallel_tool_calls
 
-    def initialize(instructions:, llm_client:, tools: [], max_steps: nil)
+    def initialize(instructions:, llm_client:, tools: [], max_steps: nil, parallel_tool_calls: false)
       @instructions = instructions
       @tools = tools
       @max_steps = max_steps || DEFAULT_MAX_STEPS
+      @parallel_tool_calls = parallel_tool_calls
       @tool_executor = ToolExecutor.new(tools: tools)
       @llm_client = llm_client
     end
@@ -26,7 +27,8 @@ module Rixie
         instructions: @instructions,
         tools: @tools,
         max_steps: @max_steps,
-        llm_client: llm_client
+        llm_client: llm_client,
+        parallel_tool_calls: @parallel_tool_calls
       )
     end
 
@@ -38,36 +40,74 @@ module Rixie
         Rixie.logger.info { "[Agent] llm_call ##{thoughts.size + 1}" }
         thought = llm_call(messages:, listener:)
 
-        case thought.type
-        when :tool_call
+        if thought.tool_call?
           raise MaxStepsExceededError, "Max steps (#{@max_steps}) exceeded" if tool_call_count >= @max_steps
           tool_call_count += 1
-          thought.tool_calls.each { |tc| Rixie.logger.info { "[Agent] tool_call: #{tc.name}(#{tc.arguments})" } }
-          tool_results = @tool_executor.execute(thought.tool_calls)
-          tool_results.each { |r| Rixie.logger.info { "[Agent] tool_result: #{r[:content].inspect}" } }
-          thought = thought.with(tool_results: tool_results)
-          thoughts << thought
-          listener.emit(Event::ThoughtCompleted.new(thought: thought))
-          append_tool_messages(thought, tool_results, messages:)
+          thought.tool_calls.each do |tc|
+            Rixie.logger.info { "[Agent] tool_call: #{tc.name}(#{tc.arguments})" }
+            listener.emit(Event::ToolCallStart.new(tool_call: tc))
+          end
+
+          results = map_tool_calls(thought.tool_calls) { |tc| @tool_executor.execute(tc) }
+
+          thought.tool_calls.zip(results).each do |tc, result|
+            Rixie.logger.info { "[Agent] tool_result: #{result[:content].inspect}" }
+            listener.emit(Event::ToolCallEnd.new(tool_call: tc, result: result))
+          end
+
+          listener.emit(Event::StepCompleted.new(tool_calls: thought.tool_calls, tool_results: results))
+
+          thought = record_thought(thoughts, thought, results)
+          append_thought_messages(messages, thought)
+
           if @tool_executor.return_direct?(thought.tool_calls)
             listener.emit(Event::Finished.new(content: nil))
             return ThinkResult.new(content: nil, thoughts: thoughts)
           end
-        when :finish
+        elsif thought.finish?
           thoughts << thought
           Rixie.logger.info { "[Agent] finish: #{thought.content.inspect}" }
           listener.emit(Event::ThoughtCompleted.new(thought: thought))
           listener.emit(Event::Finished.new(content: thought.content))
           return ThinkResult.new(content: thought.content, thoughts: thoughts)
+        else
+          raise Rixie::AgentError, "Unknown thought type: #{thought.type.inspect}"
         end
       end
     end
 
     private
 
-    def append_tool_messages(thought, tool_results, messages:)
+    def map_tool_calls(tool_calls, &block)
+      @parallel_tool_calls ? concurrent_map(tool_calls, &block) : tool_calls.map(&block)
+    end
+
+    def concurrent_map(items, &block)
+      # Capture exceptions as values inside each thread so no thread dies with an unhandled exception.
+      # This prevents stderr noise from Thread.report_on_exception and ensures all threads are joined
+      # before raising. Ruby has no safe cancellation, so we always wait for every thread to finish.
+      threads = items.map do |item|
+        Thread.new do
+          {ok: block.call(item)}
+        rescue => e
+          {err: e}
+        end
+      end
+      outcomes = threads.map(&:value)
+      first_error = outcomes.find { |o| o.key?(:err) }&.fetch(:err)
+      raise first_error if first_error
+      outcomes.map { |o| o[:ok] }
+    end
+
+    def record_thought(thoughts, thought, results)
+      thought = thought.with(tool_results: results)
+      thoughts << thought
+      thought
+    end
+
+    def append_thought_messages(messages, thought)
       messages << Message::Assistant.new(content: nil, tool_calls: thought.tool_calls)
-      tool_results.each { |r| messages << Message::Tool.new(tool_call_id: r[:tool_call_id], content: r[:content]) }
+      thought.tool_results.each { |r| messages << Message::Tool.new(tool_call_id: r[:tool_call_id], content: r[:content]) }
     end
 
     def llm_call(messages:, listener:)

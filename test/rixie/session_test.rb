@@ -294,7 +294,7 @@ class SessionTest < Minitest::Test
     assert_equal "Hello", tokens.map(&:delta).join
   end
 
-  def test_live_yields_event_thought_completed_events
+  def test_live_yields_event_thought_completed_for_finish_thought
     tool = Rixie::Tool.new(name: "search", description: "desc", input_schema: {}, call: ->(_) { "found" })
     session = Rixie::Session.new(
       instructions: "Be helpful.",
@@ -307,9 +307,26 @@ class SessionTest < Minitest::Test
     )
     events = session.live("hi").to_a
     thought_events = events.select { |e| e.is_a?(Rixie::Event::ThoughtCompleted) }
-    tool_call_events = thought_events.select { |e| e.thought.tool_call? }
-    assert_equal 1, tool_call_events.size
-    assert_equal "search", tool_call_events.first.thought.tool_calls.first.name
+    finish_events = thought_events.select { |e| e.thought.finish? }
+    assert_equal 1, finish_events.size
+    assert_equal "Done", finish_events.first.thought.content
+  end
+
+  def test_live_yields_step_completed_events_for_tool_calls
+    tool = Rixie::Tool.new(name: "search", description: "desc", input_schema: {}, call: ->(_) { "found" })
+    session = Rixie::Session.new(
+      instructions: "Be helpful.",
+      tools: [tool],
+      llm_client: make_client([]),
+      stream_client: make_stream_client([
+        tool_call_response(id: "c1", name: "search"),
+        finish_response(content: "Done")
+      ])
+    )
+    events = session.live("hi").to_a
+    step_events = events.select { |e| e.is_a?(Rixie::Event::StepCompleted) }
+    assert_equal 1, step_events.size
+    assert_equal "search", step_events.first.tool_calls.first.name
   end
 
   def test_live_yields_event_finished_event
@@ -369,5 +386,22 @@ class SessionTest < Minitest::Test
     assert_equal 0, session.tasks.size
     enum.to_a
     assert_equal 1, session.tasks.size
+  end
+
+  def test_parallel_tool_calls_true_passes_setting_through_to_agent
+    session = Rixie::Session.new(
+      instructions: "Be helpful.",
+      llm_client: make_client([]),
+      parallel_tool_calls: true
+    )
+    assert_equal true, session.agent.parallel_tool_calls
+  end
+
+  def test_parallel_tool_calls_false_default_passes_setting_through_to_agent
+    session = Rixie::Session.new(
+      instructions: "Be helpful.",
+      llm_client: make_client([])
+    )
+    assert_equal false, session.agent.parallel_tool_calls
   end
 end

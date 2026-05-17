@@ -110,7 +110,7 @@ class RunTest < Minitest::Test
     assert_equal "Answer", messages.last.content
   end
 
-  def test_listener_receives_thought_completed_events_during_execute
+  def test_listener_receives_step_completed_events_during_execute
     tool = Rixie::Tool.new(name: "search", description: "s", input_schema: {}, call: ->(_) { "found" })
     agent = make_agent(
       [tool_call_response(id: "c1", name: "search"), finish_response],
@@ -119,12 +119,11 @@ class RunTest < Minitest::Test
     run = make_run(agent)
 
     received = []
-    listener.on(Rixie::Event::ThoughtCompleted) { |e| received << e }
+    listener.on(Rixie::Event::StepCompleted) { |e| received << e }
     run.execute(listener: listener)
 
-    tool_call_events = received.select { |e| e.thought.tool_call? }
-    assert_equal 1, tool_call_events.size
-    assert_equal "search", tool_call_events.first.thought.tool_calls.first.name
+    assert_equal 1, received.size
+    assert_equal "search", received.first.tool_calls.first.name
   end
 
   def test_find_tool_call_returns_matching_tool_call

@@ -65,8 +65,8 @@ Task     × N → Session  # Entire conversation
 
 **Rixie::EventListener** — Instance-based pub/sub (not global). Scoped to a single Task lifecycle to prevent cross-talk between concurrent sessions. Used for external observability (e.g. streaming, logging) — internal state flows through return values, not events.
 
-- Events emitted by Agent: `Event::ThoughtCompleted` `{ thought: }` (fires for every iteration — both `:tool_call` and `:finish` thoughts), `Event::Finished` `{ content: String | nil }` (Run-terminal singleton — always fires exactly once when `Agent#think` returns, regardless of exit path), `Event::Token` `{ delta: }` (streaming).
-- Firing order invariant: within a single iteration `Token*` may stream, then `ThoughtCompleted` fires; across the whole Run, `Finished` is always the last event (`content` is nil on the `return_direct` exit path).
+- Events emitted by Agent: `Event::ToolCallStart` `{ tool_call: }` (fires once per tool call, before execution), `Event::ToolCallEnd` `{ tool_call:, result: }` (fires once per tool call, after execution — in `tool_calls` order even in parallel mode), `Event::StepCompleted` `{ tool_calls:, tool_results: }` (fires after all tool calls in a single `:tool_call` iteration complete), `Event::ThoughtCompleted` `{ thought: }` (fires only for `:finish` thoughts — not for `:tool_call` iterations), `Event::Finished` `{ content: String | nil }` (Run-terminal singleton — always fires exactly once when `Agent#think` returns, regardless of exit path), `Event::Token` `{ delta: }` (streaming).
+- Firing order invariant within a `:tool_call` iteration: `ToolCallStart` × N (sequential, all before any execution) → tool execution (parallel or sequential) → `ToolCallEnd` × N (sequential, in `tool_calls` order) → `StepCompleted`. Across the whole Run, `Finished` is always the last event (`content` is nil on the `return_direct` exit path). `ThoughtCompleted` fires only on the `:finish` path, immediately before `Finished`.
 
 **Rixie::LLM::Client** — HTTP communication. Resolves provider via `Client::Resolver` on initialization.
 

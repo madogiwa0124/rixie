@@ -17,7 +17,7 @@ module Rixie
           }
         }.freeze
 
-        def self.resolve(model: nil, provider: nil, request_timeout: nil, max_tokens: nil, temperature: nil)
+        def self.resolve(model: nil, provider: nil, request_timeout: nil, max_tokens: nil, temperature: nil, parallel_tool_calls: nil)
           raise Rixie::NoProviderError, "No provider configured. Pass `provider:` or set Rixie.config.default_provider." if provider.nil?
 
           all_providers = BUILTIN_PROVIDERS.merge(Rixie.config.custom_providers)
@@ -27,14 +27,17 @@ module Rixie
           api_key = config[:api_key]
           api_key = api_key.call if api_key.respond_to?(:call)
 
-          adapter_class_for(config[:adapter]).new(
+          adapter_class = adapter_class_for(config[:adapter])
+          params = {
             model: model,
             base_url: config[:base_url],
             api_key: api_key,
             request_timeout: request_timeout,
             max_tokens: max_tokens,
             temperature: temperature
-          )
+          }
+          params[:parallel_tool_calls] = parallel_tool_calls unless parallel_tool_calls.nil? || !(adapter_class <= Adapter::OpenAI)
+          adapter_class.new(**params)
         end
 
         def self.adapter_class_for(adapter)

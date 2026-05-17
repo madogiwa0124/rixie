@@ -6,7 +6,7 @@ module Rixie
   class Session
     attr_reader :agent, :tasks, :session_id, :stream_client
 
-    def initialize(agent: nil, stream_client: nil, instructions: nil, tools: [], model: nil, provider: nil, max_steps: nil, llm_client: nil, store: nil, initial_context: [], request_timeout: nil, max_tokens: nil, temperature: nil, token_counter: nil)
+    def initialize(agent: nil, stream_client: nil, instructions: nil, tools: [], model: nil, provider: nil, max_steps: nil, llm_client: nil, store: nil, initial_context: [], request_timeout: nil, max_tokens: nil, temperature: nil, token_counter: nil, parallel_tool_calls: false)
       resolved_provider = provider || Rixie.config.default_provider
       resolved_model = model || Rixie.config.default_model
       resolved_timeout = request_timeout || Rixie.config.request_timeout
@@ -18,12 +18,14 @@ module Rixie
         instructions: instructions,
         tools: tools,
         max_steps: max_steps || Rixie.config.default_max_steps,
+        parallel_tool_calls: parallel_tool_calls,
         llm_client: llm_client || LLM::Client.new(
           model: resolved_model,
           provider: resolved_provider,
           request_timeout: resolved_timeout,
           max_tokens: resolved_max_tokens,
-          temperature: resolved_temperature
+          temperature: resolved_temperature,
+          parallel_tool_calls: parallel_tool_calls
         )
       )
 
@@ -34,7 +36,8 @@ module Rixie
           stream: true,
           request_timeout: resolved_timeout,
           max_tokens: resolved_max_tokens,
-          temperature: resolved_temperature
+          temperature: resolved_temperature,
+          parallel_tool_calls: parallel_tool_calls
         ) : nil)
       else
         stream_client
@@ -64,6 +67,9 @@ module Rixie
         listener.on(Event::Token) { |e| yielder << e }
         listener.on(Event::ThoughtCompleted) { |e| yielder << e }
         listener.on(Event::Finished) { |e| yielder << e }
+        listener.on(Event::ToolCallStart) { |e| yielder << e }
+        listener.on(Event::ToolCallEnd) { |e| yielder << e }
+        listener.on(Event::StepCompleted) { |e| yielder << e }
 
         task = Task.new(
           user_input: user_input,

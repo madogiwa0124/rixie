@@ -112,6 +112,17 @@ module Rixie
         end
       end
 
+      def render_tool_call_start(tool_call)
+        puts_indented("#{@terminal.accent("⠋")} Calling #{@terminal.bold(tool_call.name)}...")
+      end
+
+      def render_tool_call_end(tool_call, result)
+        frame(fmt("{{*}} Tool: #{@terminal.bold(tool_call.name)}"), color: :cyan) do
+          format_tool_args(tool_call.arguments).each { |line| puts line }
+          puts_indented("#{@terminal.bold("Result:")} #{result[:content].to_s.lines.first&.chomp}")
+        end
+      end
+
       # -- Spinner --
 
       def start_spinner = @spinner.start

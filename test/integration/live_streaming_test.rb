@@ -150,7 +150,7 @@ class LiveStreamingTest < Integration::TestCase
 
   # --- tool use ---
 
-  def test_live_with_tool_use_yields_thought_completed
+  def test_live_with_tool_use_yields_step_completed
     session = make_session(
       tools: [weather_tool],
       stream_responses: [
@@ -160,19 +160,18 @@ class LiveStreamingTest < Integration::TestCase
     )
     events = session.live("What's the weather in Tokyo?").to_a
 
-    thought_events = events.select { |e| e.is_a?(Rixie::Event::ThoughtCompleted) }
-    tool_call_events = thought_events.select { |e| e.thought.tool_call? }
-    assert_equal 1, tool_call_events.size
+    step_events = events.select { |e| e.is_a?(Rixie::Event::StepCompleted) }
+    assert_equal 1, step_events.size
 
     unless live?
-      thought = tool_call_events.first.thought
-      assert_equal 1, thought.tool_calls.size
-      assert_equal "get_weather", thought.tool_calls.first.name
-      assert_equal [{tool_call_id: "c1", content: "Sunny, 25°C in Tokyo"}], thought.tool_results
+      step = step_events.first
+      assert_equal 1, step.tool_calls.size
+      assert_equal "get_weather", step.tool_calls.first.name
+      assert_equal [{tool_call_id: "c1", content: "Sunny, 25°C in Tokyo"}], step.tool_results
     end
   end
 
-  def test_live_with_tool_use_thought_completed_precedes_finished
+  def test_live_with_tool_use_step_completed_precedes_finished
     session = make_session(
       tools: [weather_tool],
       stream_responses: [
@@ -187,9 +186,9 @@ class LiveStreamingTest < Integration::TestCase
 
     # In live mode the LLM may choose not to call the tool, so only assert ordering in dummy mode.
     unless live?
-      tool_call_index = events.index { |e| e.is_a?(Rixie::Event::ThoughtCompleted) && e.thought.tool_call? }
-      refute_nil tool_call_index
-      assert tool_call_index < finished_index
+      step_index = events.index { |e| e.is_a?(Rixie::Event::StepCompleted) }
+      refute_nil step_index
+      assert step_index < finished_index
     end
   end
 

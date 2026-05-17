@@ -301,7 +301,7 @@ session = Rixie::Session.new(
 puts session.chat("What's the weather in Tokyo?")
 ```
 
-The `call` callable receives a hash of arguments and must return a string (or a value that responds to `to_s`).
+The `call` callable receives a hash of arguments and must return a string (or a value that responds to `to_s`). When `parallel_tool_calls: true` is set on the session, multiple tool calls requested in the same LLM turn are executed concurrently — ensure your `call` implementation is thread-safe.
 
 ## MCP (Model Context Protocol)
 
@@ -456,16 +456,16 @@ session = Rixie::Session.new(instructions: "You are a helpful assistant.")
 
 session.live("Tell me about Ruby.").each do |event|
   case event
-  when Rixie::Event::Token
-    print event.delta   # each streamed text chunk
+  in Rixie::Event::Token[delta:]
+    print delta
     $stdout.flush
-  when Rixie::Event::ThoughtCompleted
-    # emitted after each iteration of the think loop
-    if event.thought.tool_call?
-      puts "\n[tool] #{event.thought.tool_calls.map(&:name).join(", ")}"
-    end
-  when Rixie::Event::Finished
-    puts "\n[done] #{event.content}"
+  in Rixie::Event::ToolCallStart[tool_call:]
+    puts "\n[calling #{tool_call.name}...]"
+  in Rixie::Event::ToolCallEnd[tool_call:, result:]
+    puts "[#{tool_call.name} → #{result[:content]}]"
+  in Rixie::Event::Finished[content:]
+    puts "\n[done] #{content}"
+  else
   end
 end
 ```
@@ -475,14 +475,17 @@ end
 | Class | Fields | Emitted when |
 | --- | --- | --- |
 | `Rixie::Event::Token` | `delta: String` | A text chunk arrives from the LLM |
-| `Rixie::Event::ThoughtCompleted` | `thought: Thought` | A single iteration of the think loop completes (either a tool call with results, or a finish) |
+| `Rixie::Event::ToolCallStart` | `tool_call: LLM::ToolCall` | A tool call is about to execute |
+| `Rixie::Event::ToolCallEnd` | `tool_call: LLM::ToolCall`, `result: Hash` | A tool call has completed (`result` contains `:tool_call_id` and `:content`). Fires in `tool_calls` order — not completion order — even when `parallel_tool_calls: true`. |
+| `Rixie::Event::StepCompleted` | `tool_calls: Array`, `tool_results: Array` | All tool calls in one LLM iteration have completed |
+| `Rixie::Event::ThoughtCompleted` | `thought: Thought` | The LLM returned a finish response (not emitted for tool-call iterations) |
 | `Rixie::Event::Finished` | `content: String` | The agent produces its final answer |
 
 `Event::Finished#content` is the full concatenated response — the same string you would get from `session.chat`.
 
 ### Streaming with tool use
 
-`live` supports tools the same way `chat` does. `Event::ThoughtCompleted` is emitted after each iteration; check `event.thought.tool_call?` to react specifically to tool execution rounds.
+`live` supports tools the same way `chat` does. `ToolCallStart` and `ToolCallEnd` fire around each individual tool execution, making it possible to show real-time progress.
 
 ```ruby
 session = Rixie::Session.new(
@@ -492,9 +495,11 @@ session = Rixie::Session.new(
 
 session.live("What's the weather in Tokyo?").each do |event|
   case event
-  when Rixie::Event::Token            then print event.delta
-  when Rixie::Event::ThoughtCompleted then puts "\n[called #{event.thought.tool_calls.first.name}]" if event.thought.tool_call?
-  when Rixie::Event::Finished         then puts "\n#{event.content}"
+  in Rixie::Event::Token[delta:]          then print delta
+  in Rixie::Event::ToolCallStart[tool_call:] then puts "\n[calling #{tool_call.name}...]"
+  in Rixie::Event::ToolCallEnd[tool_call:, result:] then puts "[done #{tool_call.name}: #{result[:content]}]"
+  in Rixie::Event::Finished[content:]     then puts "\n#{content}"
+  else # ignore StepCompleted, ThoughtCompleted
   end
 end
 ```

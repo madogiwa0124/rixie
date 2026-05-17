@@ -19,30 +19,14 @@ class ToolExecutorTest < Minitest::Test
 
   def test_execute_calls_matching_tool_and_returns_result
     executor = Rixie::ToolExecutor.new(tools: [make_tool(name: "greet", result: "hello")])
-    results = executor.execute([make_tool_call(id: "call_1", name: "greet")])
-    assert_equal [{tool_call_id: "call_1", content: "hello"}], results
+    result = executor.execute(make_tool_call(id: "call_1", name: "greet"))
+    assert_equal({tool_call_id: "call_1", content: "hello"}, result)
   end
 
   def test_execute_coerces_result_to_string
     executor = Rixie::ToolExecutor.new(tools: [make_tool(name: "count", result: 42)])
-    results = executor.execute([make_tool_call(id: "call_2", name: "count")])
-    assert_equal "42", results.first[:content]
-  end
-
-  def test_execute_handles_multiple_tool_calls
-    executor = Rixie::ToolExecutor.new(tools: [
-      make_tool(name: "a", result: "result_a"),
-      make_tool(name: "b", result: "result_b")
-    ])
-    calls = [
-      make_tool_call(id: "c1", name: "a"),
-      make_tool_call(id: "c2", name: "b")
-    ]
-    results = executor.execute(calls)
-    assert_equal "result_a", results[0][:content]
-    assert_equal "result_b", results[1][:content]
-    assert_equal "c1", results[0][:tool_call_id]
-    assert_equal "c2", results[1][:tool_call_id]
+    result = executor.execute(make_tool_call(id: "call_2", name: "count"))
+    assert_equal "42", result[:content]
   end
 
   def test_definitions_returns_empty_array_when_no_tools
@@ -89,7 +73,7 @@ class ToolExecutorTest < Minitest::Test
   def test_raises_agent_error_when_tool_not_found
     executor = Rixie::ToolExecutor.new(tools: [])
     assert_raises(Rixie::ToolNotFoundError) do
-      executor.execute([make_tool_call(id: "c1", name: "missing")])
+      executor.execute(make_tool_call(id: "c1", name: "missing"))
     end
   end
 end

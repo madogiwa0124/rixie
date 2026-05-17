@@ -22,11 +22,12 @@ class AgentTest < Minitest::Test
     Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", stream: stream, adapter: Rixie::LLM::Adapter::Dummy.new(responses))
   end
 
-  def make_agent(responses, tools: [], max_steps: 10, stream: false)
+  def make_agent(responses, tools: [], max_steps: 10, stream: false, parallel_tool_calls: false)
     Rixie::Agent.new(
       instructions: "Be helpful.",
       tools: tools,
       max_steps: max_steps,
+      parallel_tool_calls: parallel_tool_calls,
       llm_client: make_client(responses, stream: stream)
     )
   end
@@ -70,7 +71,7 @@ class AgentTest < Minitest::Test
     assert_equal "Final answer", result.content
   end
 
-  def test_think_emits_thought_completed_for_tool_call_thought
+  def test_think_does_not_emit_thought_completed_for_tool_call_thought
     received = []
     listener.on(Rixie::Event::ThoughtCompleted) { |e| received << e }
 
@@ -81,11 +82,8 @@ class AgentTest < Minitest::Test
     )
     agent.think(messages: [], listener: listener)
 
-    tool_call_event = received.find { |e| e.thought.tool_call? }
-    refute_nil tool_call_event
-    assert_equal 1, tool_call_event.thought.tool_calls.size
-    assert_equal "get_weather", tool_call_event.thought.tool_calls.first.name
-    assert_equal [{tool_call_id: "c1", content: "sunny"}], tool_call_event.thought.tool_results
+    tool_call_events = received.select { |e| e.thought.tool_call? }
+    assert_empty tool_call_events
   end
 
   def test_think_emits_thought_completed_for_finish_thought
@@ -247,5 +245,201 @@ class AgentTest < Minitest::Test
     assert_equal agent.instructions, new_agent.instructions
     assert_equal agent.tools, new_agent.tools
     assert_same new_client, new_agent.llm_client
+  end
+
+  def test_think_emits_tool_call_start_for_each_tool_call_before_execution
+    received = []
+    listener.on(Rixie::Event::ToolCallStart) { |e| received << e }
+
+    tool = simple_tool(name: "get_weather", result: "sunny")
+    agent = make_agent(
+      [tool_call_response(id: "c1", name: "get_weather"), finish_response],
+      tools: [tool]
+    )
+    agent.think(messages: [], listener: listener)
+
+    assert_equal 1, received.size
+    assert_equal "get_weather", received.first.tool_call.name
+    assert_equal "c1", received.first.tool_call.id
+  end
+
+  def test_think_emits_tool_call_end_for_each_tool_call_after_execution
+    received = []
+    listener.on(Rixie::Event::ToolCallEnd) { |e| received << e }
+
+    tool = simple_tool(name: "get_weather", result: "sunny")
+    agent = make_agent(
+      [tool_call_response(id: "c1", name: "get_weather"), finish_response],
+      tools: [tool]
+    )
+    agent.think(messages: [], listener: listener)
+
+    assert_equal 1, received.size
+    assert_equal "get_weather", received.first.tool_call.name
+    assert_equal({tool_call_id: "c1", content: "sunny"}, received.first.result)
+  end
+
+  def test_think_emits_step_completed_after_all_tool_calls_complete
+    received = []
+    listener.on(Rixie::Event::StepCompleted) { |e| received << e }
+
+    tool = simple_tool(name: "get_weather", result: "sunny")
+    agent = make_agent(
+      [tool_call_response(id: "c1", name: "get_weather"), finish_response],
+      tools: [tool]
+    )
+    agent.think(messages: [], listener: listener)
+
+    assert_equal 1, received.size
+    assert_equal 1, received.first.tool_calls.size
+    assert_equal [{tool_call_id: "c1", content: "sunny"}], received.first.tool_results
+  end
+
+  def test_think_emits_tool_call_start_before_tool_call_end
+    events = []
+    listener.on(Rixie::Event::ToolCallStart) { |e| events << e }
+    listener.on(Rixie::Event::ToolCallEnd) { |e| events << e }
+
+    tool = simple_tool(name: "get_weather", result: "sunny")
+    agent = make_agent(
+      [tool_call_response(id: "c1", name: "get_weather"), finish_response],
+      tools: [tool]
+    )
+    agent.think(messages: [], listener: listener)
+
+    assert_equal 2, events.size
+    assert_instance_of Rixie::Event::ToolCallStart, events[0]
+    assert_instance_of Rixie::Event::ToolCallEnd, events[1]
+  end
+
+  def test_think_with_parallel_tool_calls_executes_concurrently
+    slow_tool = Rixie::Tool.new(
+      name: "slow",
+      description: "slow tool",
+      input_schema: {},
+      call: ->(_) {
+        sleep(0.1)
+        "done"
+      }
+    )
+
+    responses = [
+      {
+        "choices" => [{
+          "message" => {
+            "content" => nil,
+            "tool_calls" => [
+              {"id" => "c1", "function" => {"name" => "slow", "arguments" => "{}"}},
+              {"id" => "c2", "function" => {"name" => "slow", "arguments" => "{}"}}
+            ]
+          }
+        }]
+      },
+      finish_response
+    ]
+
+    parallel_agent = make_agent(responses, tools: [slow_tool], parallel_tool_calls: true)
+    sequential_agent = make_agent(responses, tools: [slow_tool], parallel_tool_calls: false)
+
+    t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    parallel_agent.think(messages: [], listener: listener)
+    parallel_time = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
+
+    t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    sequential_agent.think(messages: [], listener: Rixie::EventListener.new)
+    sequential_time = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
+
+    assert parallel_time < sequential_time, "Parallel (#{parallel_time.round(3)}s) should be faster than sequential (#{sequential_time.round(3)}s)"
+  end
+
+  def test_think_with_parallel_tool_calls_false_executes_sequentially
+    order = []
+    tool_a = Rixie::Tool.new(name: "a", description: "d", input_schema: {}, call: ->(_) {
+      order << :a
+      "a"
+    })
+    tool_b = Rixie::Tool.new(name: "b", description: "d", input_schema: {}, call: ->(_) {
+      order << :b
+      "b"
+    })
+
+    responses = [
+      {
+        "choices" => [{
+          "message" => {
+            "content" => nil,
+            "tool_calls" => [
+              {"id" => "c1", "function" => {"name" => "a", "arguments" => "{}"}},
+              {"id" => "c2", "function" => {"name" => "b", "arguments" => "{}"}}
+            ]
+          }
+        }]
+      },
+      finish_response
+    ]
+
+    agent = make_agent(responses, tools: [tool_a, tool_b], parallel_tool_calls: false)
+    agent.think(messages: [], listener: listener)
+
+    assert_equal [:a, :b], order
+  end
+
+  def test_think_with_parallel_tool_calls_raises_when_a_tool_raises
+    boom_tool = Rixie::Tool.new(name: "boom", description: "d", input_schema: {}, call: ->(_) { raise "tool failed" })
+
+    responses = [
+      {
+        "choices" => [{
+          "message" => {
+            "content" => nil,
+            "tool_calls" => [
+              {"id" => "c1", "function" => {"name" => "boom", "arguments" => "{}"}},
+              {"id" => "c2", "function" => {"name" => "boom", "arguments" => "{}"}}
+            ]
+          }
+        }]
+      }
+    ]
+
+    agent = make_agent(responses, tools: [boom_tool], parallel_tool_calls: true)
+    err = assert_raises(RuntimeError) { agent.think(messages: [], listener: listener) }
+    assert_equal "tool failed", err.message
+  end
+
+  def test_think_with_parallel_tool_calls_all_threads_finish_before_raising
+    finished = []
+    latch = Mutex.new
+
+    slow_boom_tool = Rixie::Tool.new(name: "slow_boom", description: "d", input_schema: {}, call: ->(_) {
+      sleep(0.05)
+      latch.synchronize { finished << Thread.current.object_id }
+      raise "tool failed"
+    })
+
+    responses = [
+      {
+        "choices" => [{
+          "message" => {
+            "content" => nil,
+            "tool_calls" => [
+              {"id" => "c1", "function" => {"name" => "slow_boom", "arguments" => "{}"}},
+              {"id" => "c2", "function" => {"name" => "slow_boom", "arguments" => "{}"}}
+            ]
+          }
+        }]
+      }
+    ]
+
+    agent = make_agent(responses, tools: [slow_boom_tool], parallel_tool_calls: true)
+    assert_raises(RuntimeError) { agent.think(messages: [], listener: listener) }
+    assert_equal 2, finished.size
+  end
+
+  def test_with_llm_client_preserves_parallel_tool_calls
+    agent = make_agent([finish_response], parallel_tool_calls: true)
+    new_client = make_client([finish_response])
+    new_agent = agent.with_llm_client(new_client)
+
+    assert_equal true, new_agent.parallel_tool_calls
   end
 end

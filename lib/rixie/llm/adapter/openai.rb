@@ -10,10 +10,11 @@ module Rixie
   module LLM
     module Adapter
       class OpenAI
-        def initialize(model:, base_url:, api_key:, request_timeout: nil, max_tokens: nil, temperature: nil)
+        def initialize(model:, base_url:, api_key:, request_timeout: nil, max_tokens: nil, temperature: nil, parallel_tool_calls: true)
           @model = model
           @max_tokens = max_tokens
           @temperature = temperature
+          @parallel_tool_calls = parallel_tool_calls
           params = {api_key: api_key, base_url: base_url}
           params[:timeout] = request_timeout if request_timeout
           @client = ::OpenAI::Client.new(**params)
@@ -106,7 +107,10 @@ module Rixie
 
         def build_params(messages, tools)
           params = {model: @model, messages: messages}
-          params[:tools] = encode_tools(tools) unless tools.empty?
+          unless tools.empty?
+            params[:tools] = encode_tools(tools)
+            params[:parallel_tool_calls] = @parallel_tool_calls
+          end
           params[:max_tokens] = @max_tokens if @max_tokens
           params[:temperature] = @temperature unless @temperature.nil?
           params

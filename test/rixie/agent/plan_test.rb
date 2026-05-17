@@ -62,16 +62,15 @@ class PlanTest < Minitest::Test
     assert result.thoughts.first.tool_call?
   end
 
-  def test_think_emits_thought_completed_for_plan_done_tool_call
+  def test_think_emits_step_completed_for_plan_done_tool_call
     agent = make_agent([plan_done_response])
     plan = Rixie::Agent::Plan.new(base_agent: agent)
     listener = Rixie::EventListener.new
     received = []
-    listener.on(Rixie::Event::ThoughtCompleted) { |e| received << e }
+    listener.on(Rixie::Event::StepCompleted) { |e| received << e }
     plan.think(messages: [], listener: listener)
-    tool_call_events = received.select { |e| e.thought.tool_call? }
-    assert_equal 1, tool_call_events.size
-    assert_equal "plan_done", tool_call_events.first.thought.tool_calls.first.name
+    assert_equal 1, received.size
+    assert_equal "plan_done", received.first.tool_calls.first.name
   end
 
   def test_plan_done_tool_name_is_plan_done

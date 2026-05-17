@@ -6,14 +6,12 @@ module Rixie
       @tools = tools.each_with_object({}) { |t, h| h[t.name] = t }
     end
 
-    def execute(tool_calls)
-      tool_calls.map do |tool_call|
-        tool = @tools[tool_call.name]
-        raise Rixie::ToolNotFoundError, "Tool not found: #{tool_call.name.inspect}" if tool.nil?
+    def execute(tool_call)
+      tool = @tools[tool_call.name]
+      raise Rixie::ToolNotFoundError, "Tool not found: #{tool_call.name.inspect}" if tool.nil?
 
-        result = tool.call(tool_call.arguments)
-        {tool_call_id: tool_call.id, content: result.to_s}
-      end
+      result = tool.call(tool_call.arguments)
+      {tool_call_id: tool_call.id, content: result.to_s}
     end
 
     def return_direct?(tool_calls)
