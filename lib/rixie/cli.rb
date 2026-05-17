@@ -14,6 +14,7 @@ module Rixie
     attr_reader :current_model, :commands
 
     @extra_commands = []
+    @extra_tools = []
 
     def self.register_command(command_class)
       @extra_commands |= [command_class]
@@ -26,6 +27,19 @@ module Rixie
 
     def self.reset_registered_commands!
       @extra_commands = []
+    end
+
+    def self.register_tool(tool)
+      @extra_tools |= [tool]
+      self
+    end
+
+    def self.extra_tools
+      @extra_tools
+    end
+
+    def self.reset_registered_tools!
+      @extra_tools = []
     end
 
     def self.start(argv = ARGV)
@@ -184,15 +198,17 @@ module Rixie
     def build_session(context: [])
       Rixie::Session.new(
         instructions: @options[:instructions],
+        tools: self.class.extra_tools,
         model: @current_model,
         provider: @options[:provider],
-        initial_context: context
+        initial_context: context,
+        parallel_tool_calls: true
       )
     end
 
     def handle_input(input)
       renderer.print_agent_prefix
-      tool_called = false
+      tool_section_started = false
       renderer.start_spinner
 
       session.live(input, strategy: current_strategy).each do |event|
@@ -201,11 +217,18 @@ module Rixie
           renderer.stop_spinner
           renderer.stream_token(delta)
 
-        in Rixie::Event::ThoughtCompleted[thought:] if thought.tool_call?
+        in Rixie::Event::ToolCallStart[tool_call:]
           renderer.stop_spinner
-          renderer.newline unless tool_called
-          tool_called = true
-          renderer.render_tool_call(thought)
+          unless tool_section_started
+            renderer.newline
+            tool_section_started = true
+          end
+          renderer.render_tool_call_start(tool_call)
+
+        in Rixie::Event::ToolCallEnd[tool_call:, result:]
+          renderer.render_tool_call_end(tool_call, result)
+
+        in Rixie::Event::StepCompleted
           renderer.print_agent_prefix
           renderer.start_spinner
 

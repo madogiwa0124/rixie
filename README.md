@@ -239,6 +239,28 @@ def call(arg, cli:)
 end
 ```
 
+### Custom tools
+
+Register tools with `Rixie::CLI.register_tool` to make them available in the CLI session. This is useful for testing tools interactively or building domain-specific CLIs.
+
+```ruby
+require "rixie/cli"
+
+weather_tool = Rixie::Tool.new(
+  name:         "get_weather",
+  description:  "Returns the current weather for a given city.",
+  input_schema: {
+    type: "object",
+    properties: { city: { type: "string" } },
+    required: ["city"]
+  },
+  call: ->(args) { "Sunny, 24°C in #{args["city"]}" }
+)
+
+Rixie::CLI.register_tool(weather_tool)
+Rixie::CLI.start
+```
+
 ## Quick Start
 
 ```ruby
