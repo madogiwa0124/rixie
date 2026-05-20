@@ -66,6 +66,11 @@ module Rixie
           - When making an assumption, surface it explicitly (e.g. "Assuming you mean X — let me know if not.").
           - Ask at most one clarifying question at a time; prefer acting on a stated assumption over stalling.
 
+          Using tools:
+          - Before calling any tool, make sure you have enough information to use it correctly.
+          - If the user's request is vague or missing required details (e.g. "search the web" without a topic), call the human_input tool to ask for the specifics. Do not ask in plain text — always use the human_input tool call.
+          - Do not guess at arguments — ask once via human_input, then act.
+
           After using a tool:
           - Briefly state what was done and the outcome — just the essential result, not a full recap.
 
@@ -196,12 +201,20 @@ module Rixie
     def build_session(context: [])
       Rixie::Session.new(
         instructions: @options[:instructions],
-        tools: self.class.extra_tools,
+        tools: default_tools + self.class.extra_tools,
         model: @current_model,
         provider: @options[:provider],
         initial_context: context,
         parallel_tool_calls: true
       )
+    end
+
+    def default_tools
+      [
+        Rixie::Tool::HumanInput,
+        Rixie::Tool::Fetch,
+        Rixie::Tool::WebSearch
+      ]
     end
 
     def handle_input(input)

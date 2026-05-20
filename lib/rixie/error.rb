@@ -18,6 +18,13 @@ module Rixie
     class ResponseTruncatedError < Error; end
   end
 
+  module Http
+    class Error < ::Rixie::Error; end
+    class TimeoutError < Error; end
+    class ConnectionError < Error; end
+    class SSRFError < Error; end
+  end
+
   module MCP
     class Error < ::Rixie::Error; end
     class TimeoutError < Error; end

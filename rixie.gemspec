@@ -33,6 +33,8 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency "cli-ui", "~> 2.0"
   spec.add_dependency "logger"
+  # Required for Tools::Fetch and Search::DuckDuckGo
+  spec.add_dependency "nokogiri"
 
   spec.add_development_dependency "minitest", "~> 5.0"
   spec.add_development_dependency "rake", "~> 13.0"

@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "net/http"
 require "json"
 require "uri"
 
@@ -12,10 +11,15 @@ module Rixie
 
         def initialize(url:, headers: {}, client_info: nil, http_client: nil)
           uri = URI.parse(url)
-          @http = (http_client || Net::HTTP).new(uri.host, uri.port)
-          @http.use_ssl = (uri.scheme == "https")
+          @url = url
           @path = uri.path.empty? ? "/" : uri.path
-          @headers = {"Content-Type" => "application/json", "Accept" => "application/json, text/event-stream"}.merge(headers)
+          @http_client = Rixie::Http::Client.new(
+            headers: {
+              "Content-Type" => "application/json",
+              "Accept" => "application/json, text/event-stream"
+            }.merge(headers),
+            http_client: http_client
+          )
           @client_info = client_info || {name: "rixie", version: Rixie::VERSION}
           @request_id = 0
           @session_initialized = false
@@ -62,19 +66,17 @@ module Rixie
           @request_id += 1
           body = JSON.generate({jsonrpc: "2.0", id: @request_id, method: method, params: params})
 
-          response = @http.post(@path, body, @headers)
-          parsed = JSON.parse(response.body)
+          response = @http_client.post(@url, body: body)
+          parsed = JSON.parse(response[:body])
 
           if parsed["error"]
             raise Rixie::MCP::ProtocolError, parsed.dig("error", "message")
           end
 
           parsed
-        rescue Rixie::MCP::Error
-          raise
-        rescue Net::OpenTimeout, Net::ReadTimeout => e
+        rescue Rixie::Http::TimeoutError => e
           raise Rixie::MCP::TimeoutError, e.message
-        rescue => e
+        rescue Rixie::Http::Error => e
           raise Rixie::MCP::RequestError, e.message
         end
       end

@@ -78,6 +78,16 @@ Task     × N → Session  # Entire conversation
 
 **Rixie::Store::Null** — No-op store for testing.
 
+**Rixie::Http::Client** — Shared HTTP client. Enforces SSRF protection (blocks requests to private/internal addresses), decodes gzip/deflate responses, and supports timeout configuration. Accepts `http_client:` for test injection. Returns `{ status:, headers:, body: }`.
+
+**Rixie::Search::Base** — Interface for search providers. Subclasses implement `search(query, max_results:)` returning `[{title:, snippet:, url:}, ...]`.
+
+**Rixie::Search::DuckDuckGo** — Searches DuckDuckGo Lite via `Http::Client`, parses HTML with Nokogiri. Extracts results from `a.result-link` elements and `td.result-snippet` cells; decodes target URLs from the `uddg` redirect parameter.
+
+**Rixie::Tool::Fetch** — Built-in tool constant. Fetches a URL via `Http::Client`, sanitizes HTML (removes nav, scripts, styles, headers, footers, etc., collapses excess whitespace), and returns readable text. Non-HTML responses are returned as-is.
+
+**Rixie::Tool::WebSearch** — Pre-configured `Tool` instance (default provider: `Search::DuckDuckGo`, `max_results: 5`). Use directly as `Tool::WebSearch`, or call `.with(provider:, max_results:)` to get a variant with custom settings.
+
 ## Key Design Decisions
 
 **`model` and `provider` are separate arguments in `Session` and `LLM::Client`.**
@@ -114,6 +124,9 @@ Using a tool call to signal plan completion avoids fragile text parsing, reuses 
 **Optional dependencies with descriptive errors.**
 `ruby-openai` is not a runtime dependency. The adapter attempts `require` at load time and raises `Rixie::ConfigurationError` with an actionable message if the gem is missing.
 
+**`Tool::WebSearch` is a pre-configured `Tool` constant with a `.with` factory method.**
+`WebSearch` is a `Tool` instance with default settings (`DuckDuckGo`, `max_results: 5`), usable as `tools: [Tool::WebSearch]`. Customization goes through `WebSearch.with(provider:, max_results:)`, which returns a new `Tool` instance. The singleton method is defined via `define_singleton_method(:with, &_build)`, reusing the same lambda that built the default. This avoids subclassing for what is just a factory while keeping the callsite symmetric with `Tool::Fetch`.
+
 ## Error Classes
 
 ```ruby
@@ -122,8 +135,18 @@ Rixie::Error                      # base
   │    ├─ NoProviderError
   │    └─ UnknownProviderError
   ├─ Rixie::AgentError
-  │    └─ MaxStepsExceededError
-  └─ Rixie::LLM::Error
+  │    ├─ MaxStepsExceededError
+  │    └─ ToolNotFoundError
+  ├─ Rixie::LLM::Error
+  │    └─ ResponseTruncatedError
+  ├─ Rixie::Http::Error
+  │    ├─ TimeoutError
+  │    ├─ ConnectionError
+  │    └─ SSRFError
+  └─ Rixie::MCP::Error
+       ├─ TimeoutError
+       ├─ ProtocolError
+       └─ RequestError
 ```
 
 ## Configuration
@@ -179,6 +202,10 @@ lib/rixie/
   strategy/                 # Simple, PlanExecute
   llm/                      # Client, Resolver, Adapter (OpenAI, Anthropic)
   store/                    # Base, Memory, Null
+  http/                     # Shared HTTP client with SSRF protection
+  search/                   # Search providers (Base, DuckDuckGo)
+  tool/                     # Built-in tools (HumanInput, Fetch, WebSearch)
+  mcp/                      # MCP HTTP client
 test/support/dummy_adapter.rb  # Inject fake LLM responses in tests
 ```
 

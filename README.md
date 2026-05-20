@@ -389,6 +389,66 @@ puts response
 
 `HumanInput` is defined with `return_direct: true`, which causes the agent to stop the think-act loop immediately after the tool call and return the question as its response, rather than continuing to loop. You can use this flag on any custom tool that should short-circuit the loop in the same way.
 
+## Web Tools
+
+### Fetch
+
+`Rixie::Tool::Fetch` fetches a URL and returns the readable text content. HTML pages are sanitized — scripts, styles, navigation elements, headers, and footers are removed, and excess whitespace is collapsed. Non-HTML responses (JSON, plain text, etc.) are returned as-is.
+
+```ruby
+session = Rixie::Session.new(
+  instructions: "You are a helpful assistant.",
+  tools: [Rixie::Tool::Fetch]
+)
+puts session.chat("What does https://example.com say?")
+```
+
+Requests to private or internal addresses (localhost, 10.x.x.x, 192.168.x.x, etc.) are blocked to prevent SSRF attacks.
+
+### WebSearch
+
+`Rixie::Tool::WebSearch` searches the web using DuckDuckGo Lite and returns a numbered list of results with titles, snippets, and URLs.
+
+`WebSearch` is a pre-configured `Rixie::Tool` — use it directly, or call `.with` to get a variant with custom settings:
+
+```ruby
+session = Rixie::Session.new(
+  instructions: "You are a research assistant.",
+  tools: [Rixie::Tool::WebSearch]
+)
+puts session.chat("What are the latest Ruby releases?")
+```
+
+Options for `.with`:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `max_results:` | `5` | Maximum number of search results to return |
+| `provider:` | `Rixie::Search::DuckDuckGo.new` | Search provider. Must respond to `#search(query, max_results:)` returning `[{title:, snippet:, url:}, ...]` |
+
+```ruby
+# Fewer results
+tools: [Rixie::Tool::WebSearch.with(max_results: 3)]
+
+# Custom provider
+tools: [Rixie::Tool::WebSearch.with(provider: MySearchProvider.new)]
+```
+
+### Using Fetch and WebSearch together
+
+Combining both tools lets the agent search for pages and then read their full content:
+
+```ruby
+session = Rixie::Session.new(
+  instructions: "You are a research assistant. Search the web and fetch pages as needed.",
+  tools: [
+    Rixie::Tool::WebSearch,
+    Rixie::Tool::Fetch
+  ]
+)
+puts session.chat("Summarize the Ruby 3.4 release notes.")
+```
+
 ## Strategies
 
 ### Strategy::Simple (default)

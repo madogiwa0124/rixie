@@ -4,6 +4,7 @@ PATH
     rixie (0.1.0)
       cli-ui (~> 2.0)
       logger
+      nokogiri
 
 GEM
   remote: https://rubygems.org/
@@ -26,6 +27,8 @@ GEM
     lint_roller (1.1.0)
     logger (1.7.0)
     minitest (5.27.0)
+    nokogiri (1.19.3-arm64-darwin)
+      racc (~> 1.4)
     openai (0.62.0)
       base64
       cgi
@@ -90,7 +93,6 @@ GEM
 
 PLATFORMS
   arm64-darwin-25
-  ruby
 
 DEPENDENCIES
   irb
@@ -115,6 +117,7 @@ CHECKSUMS
   lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
   minitest (5.27.0) sha256=2d3b17f8a36fe7801c1adcffdbc38233b938eb0b4966e97a6739055a45fa77d5
+  nokogiri (1.19.3-arm64-darwin) sha256=71b9bd424b1b7abc18b05052a1a3cfd3627abdca62be280854cc411791357e42
   openai (0.62.0) sha256=089e1ffa7ebb4f7fa58e9fce3a139b9acef3aeebdf5a452304ab9d8b0e2e84b9
   parallel (1.28.0) sha256=33e6de1484baf2524792d178b0913fc8eb94c628d6cfe45599ad4458c638c970
   parser (3.3.11.1) sha256=d17ace7aabe3e72c3cc94043714be27cc6f852f104d81aa284c2281aecc65d54

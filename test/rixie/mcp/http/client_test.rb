@@ -5,65 +5,68 @@ require "test_helper"
 class Rixie::MCP::Http::ClientTest < Minitest::Test
   def setup
     super
-    @url = "http://localhost:8080/mcp"
+    @url = "http://example.com/mcp"
   end
 
   # --- helpers ---
 
-  # Builds a fake http_client factory whose instance serves JSON bodies in order.
-  def http_factory(responses)
-    http_instance = Minitest::Mock.new
-    responses.each do |body|
-      res = Net::HTTPSuccess.new("1.1", "200", "OK")
-      res.instance_variable_set(:@body, JSON.generate(body))
-      def res.body = @body
-      http_instance.expect(:use_ssl=, nil, [false])
-      http_instance.expect(:post, res, [String, String, Hash])
+  # Builds a fake Net::HTTP instance whose #request returns JSON bodies in order.
+  def mock_net_http(*response_bodies)
+    queue = response_bodies.dup
+    http = Object.new
+    http.define_singleton_method(:request) do |_req|
+      body_hash = queue.shift
+      json = JSON.generate(body_hash)
+      res = Object.new
+      res.define_singleton_method(:code) { "200" }
+      res.define_singleton_method(:body) { json }
+      res.define_singleton_method(:to_hash) { {} }
+      res.define_singleton_method(:[]) { |_key| nil }
+      res
     end
-    factory = Object.new
-    factory.define_singleton_method(:new) { |_, _| http_instance }
-    factory
+    http
   end
 
-  # Builds a fake http_client factory whose instance calls the given block per post.
-  # Block receives (body, headers) and must return a Net::HTTP response.
-  def http_factory_spy(&on_post)
-    http_instance = Object.new
-    http_instance.define_singleton_method(:use_ssl=) { |_| }
-    http_instance.define_singleton_method(:post) { |_path, body, headers| on_post.call(body, headers) }
-    factory = Object.new
-    factory.define_singleton_method(:new) { |_, _| http_instance }
-    factory
+  # Builds a spy Net::HTTP instance that calls the block for each #request.
+  # Block receives the Net::HTTP::Request object and must return a response.
+  def spy_net_http(&on_request)
+    http = Object.new
+    http.define_singleton_method(:request) { |req| on_request.call(req) }
+    http
+  end
+
+  def json_net_response(body_hash)
+    json = JSON.generate(body_hash)
+    res = Object.new
+    res.define_singleton_method(:code) { "200" }
+    res.define_singleton_method(:body) { json }
+    res.define_singleton_method(:to_hash) { {} }
+    res.define_singleton_method(:[]) { |_key| nil }
+    res
   end
 
   def new_client(responses: nil, headers: {}, initialized: false, **opts)
-    opts[:http_client] = http_factory(responses) if responses
+    opts[:http_client] = mock_net_http(*responses) if responses
     Rixie::MCP::Http::Client.new(url: @url, headers: headers, **opts).tap do |c|
       c.instance_variable_set(:@session_initialized, true) if initialized
     end
   end
 
-  def new_client_spy(headers: {}, initialized: false, client_info: nil, &on_post)
-    Rixie::MCP::Http::Client.new(url: @url, headers: headers, client_info: client_info, http_client: http_factory_spy(&on_post)).tap do |c|
+  def new_client_spy(headers: {}, initialized: false, client_info: nil, &on_request)
+    http = spy_net_http(&on_request)
+    Rixie::MCP::Http::Client.new(url: @url, headers: headers, client_info: client_info, http_client: http).tap do |c|
       c.instance_variable_set(:@session_initialized, true) if initialized
     end
-  end
-
-  def json_response(id, payload)
-    res = Net::HTTPSuccess.new("1.1", "200", "OK")
-    res.instance_variable_set(:@body, JSON.generate({"jsonrpc" => "2.0", "id" => id}.merge(payload)))
-    def res.body = @body
-    res
   end
 
   def dispatch_response(parsed)
     case parsed["method"]
     when "initialize"
-      json_response(parsed["id"], "result" => {})
+      json_net_response({"jsonrpc" => "2.0", "id" => parsed["id"], "result" => {}})
     when "tools/list"
-      json_response(parsed["id"], "result" => {"tools" => []})
+      json_net_response({"jsonrpc" => "2.0", "id" => parsed["id"], "result" => {"tools" => []}})
     when "tools/call"
-      json_response(parsed["id"], "result" => {"content" => [{"type" => "text", "text" => "ok"}]})
+      json_net_response({"jsonrpc" => "2.0", "id" => parsed["id"], "result" => {"content" => [{"type" => "text", "text" => "ok"}]}})
     end
   end
 
@@ -129,17 +132,18 @@ class Rixie::MCP::Http::ClientTest < Minitest::Test
 
   def test_list_tools_sends_tools_list_request
     captured = nil
-    new_client_spy { |body, _headers|
-      captured = JSON.parse(body)
-      dispatch_response(captured)
+    new_client_spy { |req|
+      parsed = JSON.parse(req.body)
+      captured = parsed
+      dispatch_response(parsed)
     }.list_tools
     assert_equal "tools/list", captured["method"]
   end
 
   def test_list_tools_calls_initialize_session_before_request
     requests = []
-    new_client_spy { |body, _headers|
-      parsed = JSON.parse(body)
+    new_client_spy { |req|
+      parsed = JSON.parse(req.body)
       requests << parsed["method"]
       dispatch_response(parsed)
     }.list_tools
@@ -155,9 +159,10 @@ class Rixie::MCP::Http::ClientTest < Minitest::Test
 
   def test_call_tool_sends_tools_call_request
     captured = nil
-    new_client_spy { |body, _headers|
-      captured = JSON.parse(body)
-      dispatch_response(captured)
+    new_client_spy { |req|
+      parsed = JSON.parse(req.body)
+      captured = parsed
+      dispatch_response(parsed)
     }.call_tool("my_tool", {"x" => 1})
     assert_equal "tools/call", captured["method"]
     assert_equal "my_tool", captured["params"]["name"]
@@ -171,8 +176,8 @@ class Rixie::MCP::Http::ClientTest < Minitest::Test
 
   def test_call_tool_calls_initialize_session_before_request
     requests = []
-    new_client_spy { |body, _headers|
-      parsed = JSON.parse(body)
+    new_client_spy { |req|
+      parsed = JSON.parse(req.body)
       requests << parsed["method"]
       dispatch_response(parsed)
     }.call_tool("my_tool")
@@ -183,8 +188,8 @@ class Rixie::MCP::Http::ClientTest < Minitest::Test
 
   def test_initialize_session_sends_initialize_only_once
     call_count = 0
-    client = new_client_spy { |body, _headers|
-      parsed = JSON.parse(body)
+    client = new_client_spy { |req|
+      parsed = JSON.parse(req.body)
       call_count += 1 if parsed["method"] == "initialize"
       dispatch_response(parsed)
     }
@@ -195,8 +200,8 @@ class Rixie::MCP::Http::ClientTest < Minitest::Test
 
   def test_initialize_session_sends_correct_protocol_version_and_client_info
     captured_params = nil
-    new_client_spy { |body, _headers|
-      parsed = JSON.parse(body)
+    new_client_spy { |req|
+      parsed = JSON.parse(req.body)
       captured_params = parsed["params"] if parsed["method"] == "initialize"
       dispatch_response(parsed)
     }.list_tools
@@ -207,8 +212,8 @@ class Rixie::MCP::Http::ClientTest < Minitest::Test
 
   def test_custom_client_info_is_sent_in_initialize
     captured_params = nil
-    new_client_spy(client_info: {name: "my-app", version: "2.0.0"}) { |body, _headers|
-      parsed = JSON.parse(body)
+    new_client_spy(client_info: {name: "my-app", version: "2.0.0"}) { |req|
+      parsed = JSON.parse(req.body)
       captured_params = parsed["params"] if parsed["method"] == "initialize"
       dispatch_response(parsed)
     }.list_tools
@@ -226,22 +231,36 @@ class Rixie::MCP::Http::ClientTest < Minitest::Test
   end
 
   def test_request_raises_timeout_error_on_read_timeout
-    client = new_client_spy(initialized: true) { |_, _| raise Net::ReadTimeout }
+    http = spy_net_http { |_req| raise Net::ReadTimeout }
+    client = Rixie::MCP::Http::Client.new(url: @url, http_client: http).tap do |c|
+      c.instance_variable_set(:@session_initialized, true)
+    end
     assert_raises(Rixie::MCP::TimeoutError) { client.list_tools }
   end
 
   def test_request_raises_timeout_error_on_open_timeout
-    client = new_client_spy(initialized: true) { |_, _| raise Net::OpenTimeout }
+    http = spy_net_http { |_req| raise Net::OpenTimeout }
+    client = Rixie::MCP::Http::Client.new(url: @url, http_client: http).tap do |c|
+      c.instance_variable_set(:@session_initialized, true)
+    end
     assert_raises(Rixie::MCP::TimeoutError) { client.list_tools }
+  end
+
+  def test_http_error_is_mapped_to_mcp_request_error
+    http = spy_net_http { |_req| raise Errno::ECONNREFUSED }
+    client = Rixie::MCP::Http::Client.new(url: @url, http_client: http).tap do |c|
+      c.instance_variable_set(:@session_initialized, true)
+    end
+    assert_raises(Rixie::MCP::RequestError) { client.list_tools }
   end
 
   # --- custom headers ---
 
   def test_custom_headers_included_in_every_request
     seen_auth = []
-    new_client_spy(headers: {"Authorization" => "Bearer secret"}) { |body, headers|
-      seen_auth << headers["Authorization"]
-      dispatch_response(JSON.parse(body))
+    new_client_spy(headers: {"Authorization" => "Bearer secret"}) { |req|
+      seen_auth << req["Authorization"]
+      dispatch_response(JSON.parse(req.body))
     }.list_tools
     assert_equal ["Bearer secret", "Bearer secret"], seen_auth
   end

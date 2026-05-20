@@ -2,6 +2,7 @@
 
 require_relative "rixie/version"
 require_relative "rixie/error"
+require_relative "rixie/http/client"
 require_relative "rixie/configuration"
 require_relative "rixie/event"
 require_relative "rixie/event_listener"
@@ -14,6 +15,7 @@ require_relative "rixie/llm/client"
 require_relative "rixie/llm/adapter/dummy"
 require_relative "rixie/tool"
 require_relative "rixie/tool/human_input"
+require_relative "rixie/tool/fetch"
 require_relative "rixie/tool_executor"
 require_relative "rixie/prompt_builder"
 require_relative "rixie/token_counter"
@@ -32,6 +34,9 @@ require_relative "rixie/strategy/plan_execute"
 require_relative "rixie/task"
 require_relative "rixie/session"
 require_relative "rixie/mcp"
+require_relative "rixie/search/base"
+require_relative "rixie/search/duck_duck_go"
+require_relative "rixie/tool/web_search"
 
 module Rixie
   module LLM
