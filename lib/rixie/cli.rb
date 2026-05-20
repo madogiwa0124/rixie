@@ -13,6 +13,10 @@ module Rixie
     attr_accessor :strategy_name
     attr_reader :current_model, :commands
 
+    def current_context_size = session.context_size
+    def current_context_length = session.context.size
+    def compress!(keep_recent: 0) = session.compress!(keep_recent: keep_recent)
+
     @extra_commands = []
     @extra_tools = []
 
@@ -115,6 +119,8 @@ module Rixie
       @commands = [
         Commands::Strategy.new(renderer: @renderer),
         Commands::Model.new(renderer: @renderer),
+        Commands::Context.new(renderer: @renderer),
+        Commands::Compress.new(renderer: @renderer),
         Commands::Help.new(renderer: @renderer),
         *extra
       ]
