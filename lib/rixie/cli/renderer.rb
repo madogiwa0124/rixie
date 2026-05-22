@@ -2,6 +2,7 @@
 
 require_relative "terminal"
 require_relative "spinner"
+require_relative "markdown"
 
 module Rixie
   class CLI
@@ -90,6 +91,16 @@ module Rixie
       def stream_token(delta)
         print delta
         $stdout.flush
+      end
+
+      def render_markdown(text)
+        puts Markdown.render(text, terminal: @terminal)
+      end
+
+      def render_thought(text)
+        text.each_line do |line|
+          puts_indented(@terminal.secondary(line.chomp))
+        end
       end
 
       # -- Agent output --

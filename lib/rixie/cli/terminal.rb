@@ -17,6 +17,7 @@ module Rixie
       def warn(text) = fmt("{{yellow:#{text}}}")
       def accent(text) = fmt("{{cyan:#{text}}}")
       def bold(text) = fmt("{{bold:#{text}}}")
+      def italic(text) = fmt("{{italic:#{text}}}")
       def secondary(text) = fmt("{{magenta:#{text}}}")
     end
   end

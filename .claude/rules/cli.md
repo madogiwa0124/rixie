@@ -6,7 +6,8 @@
 CLI                          # REPL loop, option parsing, session lifecycle
 ├── Terminal                 # Wraps ::CLI::UI — the only place that knows cli/ui
 ├── Renderer                 # All terminal output; receives Terminal via DI
-│   └── Spinner              # Spinner thread; owned by Renderer
+│   ├── Spinner              # Spinner thread; owned by Renderer
+│   └── Markdown             # Pure function: markdown text → styled text via Terminal
 └── Commands::*              # One class per slash command; delegates output to Renderer
 ```
 

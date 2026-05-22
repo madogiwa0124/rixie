@@ -226,16 +226,21 @@ module Rixie
     def handle_input(input)
       renderer.print_agent_prefix
       tool_section_started = false
+      buffer = +""
       renderer.start_spinner
 
       session.live(input, strategy: current_strategy).each do |envelope|
         case envelope.event
         in Rixie::Event::Token[delta:]
-          renderer.stop_spinner
-          renderer.stream_token(delta)
+          buffer << delta
 
         in Rixie::Event::ToolCallStart[tool_call:]
           renderer.stop_spinner
+          unless buffer.empty?
+            renderer.newline
+            renderer.render_thought(buffer)
+            buffer = +""
+          end
           unless tool_section_started
             renderer.newline
             tool_section_started = true
@@ -256,9 +261,11 @@ module Rixie
           renderer.stop_spinner
           renderer.newline
 
-        in Rixie::Event::Finished
+        in Rixie::Event::Finished[content:]
           renderer.stop_spinner
           renderer.newline
+          renderer.render_markdown(content)
+          buffer = +""
         end
       end
     rescue Rixie::Error => e
