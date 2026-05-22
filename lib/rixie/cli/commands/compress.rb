@@ -39,7 +39,7 @@ module Rixie
           return 0 if arg.nil? || arg.strip.empty?
 
           n = Integer(arg.strip)
-          n >= 0 ? n : nil
+          (n >= 0) ? n : nil
         rescue ArgumentError
           nil
         end
