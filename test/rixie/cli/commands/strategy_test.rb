@@ -33,6 +33,11 @@ class CliCommandsStrategyTest < Minitest::Test
     assert_instance_of Rixie::Strategy::PlanExecute, strategy
   end
 
+  def test_resolve_re_act
+    strategy = @command.resolve("re-act")
+    assert_instance_of Rixie::Strategy::ReAct, strategy
+  end
+
   def test_resolve_unknown_returns_nil
     assert_nil @command.resolve("unknown")
   end
@@ -51,6 +56,7 @@ class CliCommandsStrategyTest < Minitest::Test
     candidates = @command.complete("/strategy ")
     assert_includes candidates, "/strategy simple"
     assert_includes candidates, "/strategy plan-execute"
+    assert_includes candidates, "/strategy re-act"
   end
 
   def test_complete_with_no_match

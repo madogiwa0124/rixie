@@ -43,6 +43,8 @@ Task     × N → Session  # Entire conversation
 
 **Rixie::Agent::Plan** — Agent subtype for the planning phase. Wraps a `base_agent` and appends planning instructions. Owns `PLAN_DONE_TOOL` (a no-op tool) by default.
 
+**Rixie::Agent::ReAct** — Agent subtype for ReAct (Reasoning + Acting) mode. Wraps a `base_agent` and appends ReAct instructions that require the LLM to emit a `Thought:` reasoning trace in `content` before each tool call, and to make exactly one tool call per step. Internal agent is constructed with `parallel_tool_calls: false`. `tools` pass through unchanged.
+
 **Rixie::Session** — Primary user-facing entry point. Resolves config defaults (`default_provider`, `default_model`, `default_max_steps`, `default_max_tokens`, `default_temperature`, `store`) and constructs `Agent` and `LLM::Client` internally. Accepts a pre-built `agent:` for advanced use cases. Manages the entire conversation and accumulates `Context::History` entries across Tasks. Failed Tasks are excluded from context.
 
 **Rixie::Task** — Unit that accomplishes a single goal. Owns a strategy and manages a collection of Runs. Creates an `EventListener` and passes it to the strategy on execution.
@@ -56,6 +58,8 @@ Task     × N → Session  # Entire conversation
 **Rixie::Strategy::Simple** — Default strategy. Executes Run × 1.
 
 **Rixie::Strategy::PlanExecute** — Plan & Execute strategy. Runs a planning phase (Run × 1 using `Agent::Plan`) then an execution phase (Run × N, one per step). Extracts the plan from the `plan_done` tool call arguments.
+
+**Rixie::Strategy::ReAct** — ReAct strategy. Wraps `task.agent` with `Agent::ReAct` and runs Run × 1. The existing tool loop in `Agent#think` produces the Thought → Action → Observation cycle, with the ReAct system prompt forcing the LLM to verbalize reasoning into `content` on each tool-call iteration.
 
 **Rixie::Strategy::PlanExecute::Plan** — `Data.define(:steps)`. steps is an array of `{ title:, description: }`.
 
@@ -120,6 +124,9 @@ Scoping the listener to each Task prevents event cross-talk when multiple Sessio
 
 **`plan_done` is a no-op built-in tool owned by `Agent::Plan`.**
 Using a tool call to signal plan completion avoids fragile text parsing, reuses the existing tool call loop, and sidesteps issues with combining `structured_output` and `tools` in the same request.
+
+**ReAct's reasoning trace lives in `Thought#content`, not a dedicated field.**
+The existing tool loop in `Agent#think` is already iterative; what classic ReAct adds is an explicit `Thought:` reasoning trace emitted alongside each tool call. Modern function-calling models can fill `content` even on tool-call iterations when prompted to do so, so `Agent::ReAct` simply instructs the LLM via the system prompt and reuses the existing `Thought#content` field. Adding a separate `reasoning` field would be `nil` for all non-ReAct strategies and create dead fields on `Thought`. Provider-side structured reasoning channels (Claude Extended Thinking, OpenAI o-series) are a different concept and should be modeled separately if introduced.
 
 **Optional dependencies with descriptive errors.**
 `ruby-openai` is not a runtime dependency. The adapter attempts `require` at load time and raises `Rixie::ConfigurationError` with an actionable message if the gem is missing.
@@ -195,11 +202,11 @@ end
 
 ```
 lib/rixie/
-  agent.rb, agent/          # Core domain object + Plan subtype, ToolCall
+  agent.rb, agent/          # Core domain object + Plan / ReAct subtypes, ToolCall
   session.rb                # Primary entry point
   task.rb, run.rb           # Execution units
   context/                  # History, Plan — implement to_message
-  strategy/                 # Simple, PlanExecute
+  strategy/                 # Simple, PlanExecute, ReAct
   llm/                      # Client, Resolver, Adapter (OpenAI, Anthropic)
   store/                    # Base, Memory, Null
   http/                     # Shared HTTP client with SSRF protection

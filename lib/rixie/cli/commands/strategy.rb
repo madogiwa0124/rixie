@@ -6,7 +6,8 @@ module Rixie
       class Strategy < Base
         STRATEGIES = {
           "simple" => Rixie::Strategy::Simple,
-          "plan-execute" => Rixie::Strategy::PlanExecute
+          "plan-execute" => Rixie::Strategy::PlanExecute,
+          "re-act" => Rixie::Strategy::ReAct
         }.freeze
 
         def name = "strategy"

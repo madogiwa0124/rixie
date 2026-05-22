@@ -105,7 +105,7 @@ module Rixie
     end
 
     def append_thought_messages(messages, thought)
-      messages << Message::Assistant.new(content: nil, tool_calls: thought.tool_calls)
+      messages << Message::Assistant.new(content: thought.content, tool_calls: thought.tool_calls)
       thought.tool_results.each { |r| messages << Message::Tool.new(tool_call_id: r.tool_call_id, content: r.content) }
     end
 
@@ -113,7 +113,7 @@ module Rixie
       response = @llm_client.call(messages, tools: @tool_executor.definitions) { |event| on_event.call(event) }
       raise LLM::ResponseTruncatedError, "LLM response truncated (finish_reason=length)" if response.finish_reason == "length"
       if response.has_tool_calls?
-        Thought.new(type: :tool_call, content: nil, tool_calls: response.tool_calls, tool_results: nil)
+        Thought.new(type: :tool_call, content: response.content, tool_calls: response.tool_calls, tool_results: nil)
       else
         Thought.new(type: :finish, content: response.content, tool_calls: [], tool_results: nil)
       end
