@@ -219,7 +219,13 @@ module Rixie
       [
         Rixie::Tool::HumanInput,
         Rixie::Tool::Fetch,
-        Rixie::Tool::WebSearch
+        Rixie::Tool::WebSearch,
+        Rixie::Tool::WikipediaSearch,
+        Rixie::Tool::FileRead,
+        Rixie::Tool::FileList,
+        Rixie::Tool::FileSearch,
+        Rixie::Tool::CurrentTime,
+        Rixie::Tool::Calculator
       ]
     end
 

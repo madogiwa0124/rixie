@@ -434,6 +434,30 @@ tools: [Rixie::Tool::WebSearch.with(max_results: 3)]
 tools: [Rixie::Tool::WebSearch.with(provider: MySearchProvider.new)]
 ```
 
+### WikipediaSearch
+
+`Rixie::Tool::WikipediaSearch` searches Wikipedia via the MediaWiki API and returns titles, snippets, and URLs.
+
+```ruby
+session = Rixie::Session.new(
+  instructions: "You are an encyclopedic assistant.",
+  tools: [Rixie::Tool::WikipediaSearch]
+)
+puts session.chat("Who was Ada Lovelace?")
+```
+
+Options for `.with`:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `language:` | `"en"` | Wikipedia language subdomain (e.g. `"ja"`, `"de"`, `"fr"`) |
+| `max_results:` | `5` | Maximum number of search results to return |
+
+```ruby
+# Japanese Wikipedia
+tools: [Rixie::Tool::WikipediaSearch.with(language: "ja")]
+```
+
 ### Using Fetch and WebSearch together
 
 Combining both tools lets the agent search for pages and then read their full content:
@@ -447,6 +471,66 @@ session = Rixie::Session.new(
   ]
 )
 puts session.chat("Summarize the Ruby 3.4 release notes.")
+```
+
+## File Tools
+
+Three tools for reading and searching files on the local filesystem. All three are sandboxed to a configurable `root_dir` — paths that escape the root (via `..` segments or absolute paths) are rejected with an error returned to the LLM.
+
+`root_dir` defaults to `Dir.pwd` evaluated **at call time**, so the default tracks the current process directory. Pass `.with(root_dir: "/path/to/project")` to pin the sandbox to a specific directory.
+
+> **Security note:** symlinks within `root_dir` that point outside it are followed (the implementation uses `expand_path`, not `realpath`). Do not point `root_dir` at a directory containing untrusted symlinks.
+
+### FileRead
+
+`Rixie::Tool::FileRead` reads a file's contents. Binary files (detected by null-byte probe) are rejected. Supports `offset` (1-indexed line) and `limit` (default 2000 lines) for slicing large files.
+
+```ruby
+session = Rixie::Session.new(
+  instructions: "You are a code reviewer.",
+  tools: [Rixie::Tool::FileRead.with(root_dir: "/path/to/repo")]
+)
+puts session.chat("Summarize lib/foo.rb")
+```
+
+### FileList
+
+`Rixie::Tool::FileList` lists files matching a glob pattern relative to `root_dir`.
+
+```ruby
+tools: [Rixie::Tool::FileList.with(root_dir: "/path/to/repo")]
+# Agent can call: file_list(pattern: "lib/**/*.rb")
+```
+
+### FileSearch
+
+`Rixie::Tool::FileSearch` grep-searches files by regex. Output format is `path:lineno:content`. Optional `glob:` filter and `max_results:` cap (default 50) keep results manageable.
+
+```ruby
+tools: [Rixie::Tool::FileSearch.with(root_dir: "/path/to/repo")]
+# Agent can call: file_search(pattern: "TODO", glob: "**/*.rb", max_results: 20)
+```
+
+## Utility Tools
+
+### CurrentTime
+
+`Rixie::Tool::CurrentTime` returns the current time as an ISO 8601 string. LLMs do not know "now" on their own, so this fills the gap.
+
+```ruby
+tools: [Rixie::Tool::CurrentTime]
+# Agent can call: current_time(timezone: "utc")  # or "local" (default)
+```
+
+### Calculator
+
+`Rixie::Tool::Calculator` evaluates an arithmetic expression. Supports `+ - * / %`, parentheses, unary `+/-`, and `^` / `**` (right-associative). Integer division promotes to float (`5 / 2 → 2.5`). Parse errors and division-by-zero are returned as `"Error: ..."` strings rather than raised, so the LLM can see and correct them.
+
+Implemented with a hand-rolled recursive-descent parser — `eval` is not used.
+
+```ruby
+tools: [Rixie::Tool::Calculator]
+# Agent can call: calculator(expression: "(1 + 2) * 3 ^ 2")
 ```
 
 ## Strategies
