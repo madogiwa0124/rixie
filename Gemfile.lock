@@ -2,9 +2,7 @@ PATH
   remote: .
   specs:
     rixie (0.1.0)
-      cli-ui (~> 2.0)
       logger
-      nokogiri
 
 GEM
   remote: https://rubygems.org/
@@ -98,8 +96,10 @@ PLATFORMS
   x86_64-linux
 
 DEPENDENCIES
+  cli-ui
   irb
   minitest (~> 5.0)
+  nokogiri
   openai
   rake (~> 13.0)
   rixie!

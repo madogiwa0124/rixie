@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "nokogiri"
-
 module Rixie
   class Tool
     Fetch = Tool.new(
@@ -18,6 +16,12 @@ module Rixie
         required: ["url"]
       },
       call: ->(args) {
+        begin
+          require "nokogiri"
+        rescue LoadError
+          raise Rixie::ConfigurationError, "nokogiri gem is required for Tool::Fetch. Add `gem 'nokogiri'` to your Gemfile."
+        end
+
         url = args["url"] || args[:url]
         response = Rixie::Http::Client.new.get(url)
         content_type = response[:headers]["content-type"]&.first.to_s

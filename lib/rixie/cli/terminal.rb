@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
-require "cli/ui"
+begin
+  require "cli/ui"
+rescue LoadError
+  raise Rixie::ConfigurationError, "cli-ui gem is required for the rixie CLI. Add `gem 'cli-ui'` to your Gemfile."
+end
 
 module Rixie
   class CLI

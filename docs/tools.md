@@ -56,6 +56,8 @@ puts response
 
 ## Web Tools
 
+> `Rixie::Tool::Fetch` and `Rixie::Tool::WebSearch` (DuckDuckGo) require the optional **`nokogiri`** gem for HTML parsing. Add `gem "nokogiri"` to your Gemfile — without it, the first invocation raises `Rixie::ConfigurationError`.
+
 ### Fetch
 
 `Rixie::Tool::Fetch` fetches a URL and returns the readable text content. HTML pages are sanitized — scripts, styles, navigation elements, headers, and footers are removed, and excess whitespace is collapsed. Non-HTML responses (JSON, plain text, etc.) are returned as-is.

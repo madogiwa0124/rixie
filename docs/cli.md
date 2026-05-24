@@ -2,6 +2,8 @@
 
 Rixie includes an interactive CLI for chatting with an LLM directly from the terminal.
 
+> The CLI requires the optional **`cli-ui`** gem. Add `gem "cli-ui"` to your Gemfile — without it, loading the CLI raises `Rixie::ConfigurationError`.
+
 ```bash
 bundle exec rixie --provider openai --model gpt-4.1-mini
 ```

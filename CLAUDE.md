@@ -123,7 +123,10 @@ Using a tool call to signal plan completion avoids fragile text parsing, reuses 
 The existing tool loop in `Agent#think` is already iterative; what classic ReAct adds is an explicit `Thought:` reasoning trace emitted alongside each tool call. Modern function-calling models can fill `content` even on tool-call iterations when prompted to do so, so `Agent::ReAct` simply instructs the LLM via the system prompt and reuses the existing `Thought#content` field. Adding a separate `reasoning` field would be `nil` for all non-ReAct strategies and create dead fields on `Thought`. Provider-side structured reasoning channels (Claude Extended Thinking, OpenAI o-series) are a different concept and should be modeled separately if introduced.
 
 **Optional dependencies with descriptive errors.**
-`ruby-openai` is not a runtime dependency. The adapter attempts `require` at load time and raises `Rixie::ConfigurationError` with an actionable message if the gem is missing.
+`openai`, `nokogiri`, and `cli-ui` are not runtime dependencies. Each requiring site wraps `require` in `begin / rescue LoadError` and raises `Rixie::ConfigurationError` with an actionable message ("X gem is required for Y. Add `gem 'X'` to your Gemfile.") if the gem is missing.
+- `openai` — eager require at the top of `LLM::Adapter::OpenAI`; the adapter file itself is only loaded lazily via `Client::Resolver.adapter_class_for(:openai)`.
+- `cli-ui` — eager require at the top of `CLI::Terminal`; loaded only via `bin/rixie`, so a user requiring `rixie/cli` is intentionally opting in.
+- `nokogiri` — **lazy** require inside `Tool::Fetch`'s `call:` lambda and `Search::DuckDuckGo#search`, because both files are eagerly loaded from `lib/rixie.rb`. The gem must load without nokogiri; only invocation fails.
 
 Tool-related design decisions (`.with` factory pattern, `FileSandbox` centralization, Calculator parser choice) are documented in [`.claude/rules/tool.md`](.claude/rules/tool.md).
 

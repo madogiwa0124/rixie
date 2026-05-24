@@ -14,9 +14,14 @@ Add to your Gemfile:
 
 ```ruby
 gem "rixie"
+```
 
-# Also add the provider gem you need:
-gem "openai"       # for OpenAI, GitHub Models, Ollama, and other OpenAI-compatible endpoints
+Rixie keeps its runtime footprint small. The following gems are **optional** — add them only for the features you actually use. Each is loaded lazily and raises `Rixie::ConfigurationError` with an actionable message if missing.
+
+```ruby
+gem "openai"     # required for the openai / ollama provider adapter (and any OpenAI-compatible endpoint)
+gem "nokogiri"   # required for Rixie::Tool::Fetch and Rixie::Tool::WebSearch (DuckDuckGo HTML parsing)
+gem "cli-ui"     # required to run the `rixie` CLI (bin/rixie)
 ```
 
 ## Quick Start

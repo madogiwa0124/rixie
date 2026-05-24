@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "nokogiri"
 require "uri"
 
 module Rixie
@@ -20,6 +19,12 @@ module Rixie
       end
 
       def search(query, max_results: DEFAULT_MAX_RESULTS)
+        begin
+          require "nokogiri"
+        rescue LoadError
+          raise Rixie::ConfigurationError, "nokogiri gem is required for Search::DuckDuckGo. Add `gem 'nokogiri'` to your Gemfile."
+        end
+
         url = "#{SEARCH_URL}?q=#{URI.encode_www_form_component(query)}"
         response = @http_client.get(url)
         doc = Nokogiri::HTML(response[:body])

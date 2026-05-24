@@ -31,11 +31,12 @@ Gem::Specification.new do |spec|
   spec.executables = ["rixie"]
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "cli-ui", "~> 2.0"
   spec.add_dependency "logger"
-  # Required for Tools::Fetch and Search::DuckDuckGo
-  spec.add_dependency "nokogiri"
 
-  spec.add_development_dependency "minitest", "~> 5.0"
-  spec.add_development_dependency "rake", "~> 13.0"
+  # Optional dependencies. Loaded lazily and raise Rixie::ConfigurationError if missing.
+  #   cli-ui   — required for the `rixie` CLI
+  #   nokogiri — required for Tool::Fetch and Search::DuckDuckGo
+  #   openai   — required for the openai/ollama provider adapter
+
+  # Development dependencies are declared in the Gemfile.
 end
