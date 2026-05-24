@@ -18,7 +18,8 @@ module Rixie
               "Content-Type" => "application/json",
               "Accept" => "application/json, text/event-stream"
             }.merge(headers),
-            http_client: http_client
+            http_client: http_client,
+            allow_private: true
           )
           @client_info = client_info || {name: "rixie", version: Rixie::VERSION}
           @request_id = 0

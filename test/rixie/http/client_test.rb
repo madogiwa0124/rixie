@@ -171,6 +171,36 @@ class Rixie::Http::ClientTest < Minitest::Test
     assert_equal 200, result[:status]
   end
 
+  # --- allow_private ---
+
+  def test_allow_private_skips_ssrf_check_for_localhost
+    res = plain_response("ok")
+    client = Rixie::Http::Client.new(http_client: mock_http_for(res), allow_private: true)
+    result = client.get("http://localhost:9000/foo")
+    assert_equal 200, result[:status]
+  end
+
+  def test_allow_private_skips_ssrf_check_for_127_addresses
+    res = plain_response("ok")
+    client = Rixie::Http::Client.new(http_client: mock_http_for(res), allow_private: true)
+    result = client.post("http://127.0.0.1:8080/api", body: "{}")
+    assert_equal 200, result[:status]
+  end
+
+  def test_allow_private_still_blocks_unsupported_schemes
+    client = Rixie::Http::Client.new(allow_private: true)
+    assert_raises(Rixie::Http::SSRFError) { client.get("file:///etc/passwd") }
+  end
+
+  def test_allow_private_skips_redirect_ssrf_check
+    redirect = build_response(body: "", status: "301", headers: {"location" => ["http://localhost/secret"]})
+    final = plain_response("inside")
+    client = Rixie::Http::Client.new(http_client: queue_http_for(redirect, final), allow_private: true)
+    result = client.get("http://example.com/")
+    assert_equal 200, result[:status]
+    assert_equal "inside", result[:body]
+  end
+
   # --- error handling ---
 
   def test_get_raises_timeout_error_on_net_read_timeout

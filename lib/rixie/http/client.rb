@@ -19,10 +19,11 @@ module Rixie
       ].freeze
       REDIRECT_CODES = [301, 302, 303, 307, 308].freeze
 
-      def initialize(timeout: DEFAULT_TIMEOUT, headers: {}, http_client: nil)
+      def initialize(timeout: DEFAULT_TIMEOUT, headers: {}, http_client: nil, allow_private: false)
         @timeout = timeout
         @default_headers = DEFAULT_HEADERS.merge(headers)
         @http_client = http_client
+        @allow_private = allow_private
       end
 
       def get(url)
@@ -44,6 +45,7 @@ module Rixie
       def validate_url!(url)
         uri = URI.parse(url)
         raise Rixie::Http::SSRFError, "Blocked scheme: #{uri.scheme}" unless %w[http https].include?(uri.scheme)
+        return if @allow_private
         host = uri.host.to_s
         raise Rixie::Http::SSRFError, "Blocked host: #{host}" if blocked_host?(host)
       end
@@ -86,12 +88,14 @@ module Rixie
       end
 
       def build_http_client(uri)
-        addresses = Socket.getaddrinfo(uri.host, nil, nil, :STREAM).map { |a| a[3] }
-        addresses.each do |ip|
-          raise Rixie::Http::SSRFError, "Blocked host: #{ip}" if blocked_host?(ip)
-        end
         http = Net::HTTP.new(uri.host, uri.port)
-        http.ipaddr = addresses.first
+        unless @allow_private
+          addresses = Socket.getaddrinfo(uri.host, nil, nil, :STREAM).map { |a| a[3] }
+          addresses.each do |ip|
+            raise Rixie::Http::SSRFError, "Blocked host: #{ip}" if blocked_host?(ip)
+          end
+          http.ipaddr = addresses.first
+        end
         http.use_ssl = uri.scheme == "https"
         http.open_timeout = @timeout
         http.read_timeout = @timeout

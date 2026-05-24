@@ -38,20 +38,19 @@ class MCPTest < Integration::TestCase
   end
 
   def mcp_client(server)
-    http_instance = Object.new
-    http_instance.define_singleton_method(:use_ssl=) { |_| }
-    http_instance.define_singleton_method(:post) do |_path, body, _headers|
-      parsed = JSON.parse(body)
+    http = Object.new
+    http.define_singleton_method(:request) do |req|
+      parsed = JSON.parse(req.body)
       payload = server.call(parsed["method"], parsed["params"] || {})
       res_body = JSON.generate({"jsonrpc" => "2.0", "id" => parsed["id"]}.merge(payload))
-      res = Net::HTTPSuccess.new("1.1", "200", "OK")
-      res.instance_variable_set(:@body, res_body)
-      def res.body = @body
+      res = Object.new
+      res.define_singleton_method(:code) { "200" }
+      res.define_singleton_method(:body) { res_body }
+      res.define_singleton_method(:to_hash) { {} }
+      res.define_singleton_method(:[]) { |_key| nil }
       res
     end
-    factory = Object.new
-    factory.define_singleton_method(:new) { |_, _| http_instance }
-    Rixie::MCP::Http::Client.new(url: "http://localhost:9000/mcp", http_client: factory)
+    Rixie::MCP::Http::Client.new(url: "http://localhost:9000/mcp", http_client: http)
   end
 
   def test_tools_are_fetched_from_mcp_server
