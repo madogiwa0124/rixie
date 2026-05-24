@@ -26,65 +26,29 @@ Run      × N → Task     # Unit that accomplishes a single goal
 Task     × N → Session  # Entire conversation
 ```
 
-### Class Responsibilities
+### Core Classes
 
-**Rixie::Agent** — Core domain object. Owns the think + act loop, LLM communication, and tool execution.
+Navigation map only. Read the source for signatures; consult **Key Design Decisions** for non-obvious behavior.
 
-- `think(messages:, listener:)` — public: full loop (llm_call × N). Continues if tool_call is returned, exits on finish. Returns `ThinkResult(content:, thoughts:)`.
-- `llm_call(messages:)` — private: single LLM call, returns a `Thought` with `tool_results: nil` (filled in by the loop after tool execution).
-- Owns `@tool_executor` internally (synchronous execution).
-- `max_steps` is enforced as a precondition on the `:tool_call` branch, checked **before** incrementing the counter or executing the tools. Counts only `:tool_call` thoughts.
+| Class | Role |
+|---|---|
+| `Session` | User-facing entry point. Resolves config, builds `Agent` / `LLM::Client`, accumulates `Context::History` across Tasks. Failed Tasks are excluded from context. |
+| `Task` | Owns a Strategy and runs it. Creates the per-Task `EventListener`. |
+| `Run` | Wraps one `Agent#think` call. Unwraps `ThinkResult` into output + thoughts. |
+| `Agent` | Think+act loop. Owns `@tool_executor`. Returns `ThinkResult(content:, thoughts:)`. |
+| `Agent::{Plan,ReAct}` | Subtypes wrapping a base agent with phase-specific instructions. `ReAct` forces `parallel_tool_calls: false`. |
+| `Agent::Thought` | `Data.define(:type, :content, :tool_calls, :tool_results)`. `:tool_call` or `:finish`. |
+| `Strategy::{Simple,PlanExecute,ReAct}` | How many Runs a Task executes. Lives on Task, not Agent. |
+| `Context::{History,Plan,Summary}` | Conversation entries. Each implements `to_message`. |
+| `PromptBuilder` | `context.flat_map(&:to_message)` — uniform per entry type. |
+| `LLM::Client` + `Adapter::*` | Provider-agnostic call surface; per-provider encoding lives in the adapter. |
+| `LLM::ToolCall` / `LLM::Response` | Provider-agnostic intermediate types. |
+| `Tool` / `ToolExecutor` | Single concrete `Tool` class. Executor unifies built-in and MCP tools. |
+| `EventListener` / `Event::*` | Per-Task instance-based pub/sub (not a global bus). |
+| `Http::Client` | SSRF-protected HTTP. `allow_private:` opts out (used by MCP). `http_client:` for test injection. |
+| `Store::{Base,Memory,Null}` | Session persistence adapters. Memory is default. |
 
-**Rixie::Agent::Thought** — `Data.define(:type, :content, :tool_calls, :tool_results)`. type is `:tool_call` or `:finish`. For `:tool_call` thoughts, `tool_results` is filled in after tool execution (via `Thought#with`). For `:finish` thoughts, `tool_results` is `nil`. Provides `tool_call?` / `finish?` predicates.
-
-**Rixie::Agent::ThinkResult** — `Data.define(:content, :thoughts)`. Return value of `Agent#think`. `content` is `String | nil` — a string for the `:finish` exit path, `nil` for the `return_direct` exit path. `thoughts` is the full per-iteration record.
-
-**Rixie::LLM::ToolCall** — Provider-agnostic tool call (`id`, `name`, `arguments`). `from_openai_wire` parses OpenAI wire format (used in `LLM::Response.from_openai_wire`). `to_openai_wire` serializes to OpenAI wire format (used internally in `Adapter::OpenAI#encode_message`).
-
-**Rixie::Agent::Plan** — Agent subtype for the planning phase. Wraps a `base_agent` and appends planning instructions. Owns `PLAN_DONE_TOOL` (a no-op tool) by default.
-
-**Rixie::Agent::ReAct** — Agent subtype for ReAct (Reasoning + Acting) mode. Wraps a `base_agent` and appends ReAct instructions that require the LLM to emit a `Thought:` reasoning trace in `content` before each tool call, and to make exactly one tool call per step. Internal agent is constructed with `parallel_tool_calls: false`. `tools` pass through unchanged.
-
-**Rixie::Session** — Primary user-facing entry point. Resolves config defaults (`default_provider`, `default_model`, `default_max_steps`, `default_max_tokens`, `default_temperature`, `store`) and constructs `Agent` and `LLM::Client` internally. Accepts a pre-built `agent:` for advanced use cases. Manages the entire conversation and accumulates `Context::History` entries across Tasks. Failed Tasks are excluded from context.
-
-**Rixie::Task** — Unit that accomplishes a single goal. Owns a strategy and manages a collection of Runs. Creates an `EventListener` and passes it to the strategy on execution.
-
-**Rixie::Run** — Unit that returns a response for a single input. Calls `agent.think` and unwraps `ThinkResult` into `@output` (string) and `@thoughts` (`Array<Thought>`). `find_tool_call(name)` scans across thoughts. Returns `Context::History` via `to_history`.
-
-**Rixie::Context::History** — Conversation history entry. Implements `to_message` returning OpenAI wire format messages (user / assistant / tool / tool_result).
-
-**Rixie::Context::Plan** — Plan information entry. Implements `to_message` returning a system message with the full plan and current step.
-
-**Rixie::Strategy::Simple** — Default strategy. Executes Run × 1.
-
-**Rixie::Strategy::PlanExecute** — Plan & Execute strategy. Runs a planning phase (Run × 1 using `Agent::Plan`) then an execution phase (Run × N, one per step). Extracts the plan from the `plan_done` tool call arguments.
-
-**Rixie::Strategy::ReAct** — ReAct strategy. Wraps `task.agent` with `Agent::ReAct` and runs Run × 1. The existing tool loop in `Agent#think` produces the Thought → Action → Observation cycle, with the ReAct system prompt forcing the LLM to verbalize reasoning into `content` on each tool-call iteration.
-
-**Rixie::Strategy::PlanExecute::Plan** — `Data.define(:steps)`. steps is an array of `{ title:, description: }`.
-
-**Rixie::PromptBuilder** — Assembles messages for LLM. Calls `context.flat_map(&:to_message)` uniformly regardless of context entry type.
-
-**Rixie::ToolExecutor** — Owned by Agent. Executes tool calls and returns results. Unifies `BuiltinTools` and `MCPTools` via a common `Tool` interface.
-
-**Rixie::EventListener** — Instance-based pub/sub (not global). Scoped to a single Task lifecycle to prevent cross-talk between concurrent sessions. Used for external observability (e.g. streaming, logging) — internal state flows through return values, not events.
-
-
-**Rixie::LLM::Client** — HTTP communication. Resolves provider via `Client::Resolver` on initialization.
-
-**Rixie::LLM::Client::Resolver** — Maps `provider` string to an adapter instance. Raises `NoProviderError` if `provider` is nil (resolution of `Rixie.config.default_provider` is Session's responsibility). Also merges `Rixie.config.custom_providers` into the provider registry.
-
-**Rixie::LLM::Adapter::OpenAI** — Wraps `ruby-openai` gem (optional dependency). Supports any OpenAI-compatible endpoint via `base_url` override.
-
-**Rixie::Store::Base** — Interface definition for storage adapters.
-
-**Rixie::Store::Memory** — In-memory store (default).
-
-**Rixie::Store::Null** — No-op store for testing.
-
-**Rixie::Http::Client** — Shared HTTP client. Enforces SSRF protection (blocks requests to private/internal addresses), decodes gzip/deflate responses, and supports timeout configuration. Accepts `http_client:` for test injection. Returns `{ status:, headers:, body: }`.
-
-Built-in tools (`Tool::Fetch`, `WebSearch`, `WikipediaSearch`, `CurrentTime`, `Calculator`, `FileRead/List/Search`, `FileSandbox`) and search providers (`Search::Base`, `DuckDuckGo`, `Wikipedia`) are catalogued in [`.claude/rules/tool.md`](.claude/rules/tool.md).
+Built-in tools and search providers are catalogued in [`.claude/rules/tool.md`](.claude/rules/tool.md).
 
 ## Key Design Decisions
 
@@ -174,25 +138,6 @@ end
 ```
 
 Built-in provider: `openai`. OpenAI-compatible endpoints (GitHub Models, Ollama, etc.) can be registered via `config.register_provider`.
-
-## Testing Approach
-
-LLM responses are injected via `DummyAdapter` — no real HTTP requests are made in tests.
-
-```ruby
-# test/support/dummy_adapter.rb
-class DummyAdapter
-  def initialize(responses)
-    @responses = responses.dup
-  end
-
-  def chat(messages, tools:)
-    @responses.shift
-  end
-end
-```
-
-`Strategy::PlanExecute` tests enqueue a `plan_done` tool call response followed by per-step responses in order.
 
 ## Directory Structure
 
