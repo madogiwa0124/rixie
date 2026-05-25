@@ -12,7 +12,7 @@ Gem::Specification.new do |spec|
   spec.description = "Rixie is a standalone Ruby gem for orchestrating AI agents. It provides a clean abstraction for LLM communication, tool execution, and multi-step reasoning strategies."
   spec.homepage = "https://github.com/madogiwa0124/rixie"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.3"
+  spec.required_ruby_version = ">= 3.4"
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = "#{spec.homepage}/tree/main"
