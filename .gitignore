@@ -11,3 +11,6 @@
 # Bundler-generated binstubs (use `bundle exec rake audit` instead)
 /bin/bundle-audit
 /bin/bundler-audit
+
+# Personal Claude Code settings (.claude/rules and .claude/skills are intentionally shared)
+/.claude/settings.json
