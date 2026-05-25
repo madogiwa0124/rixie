@@ -4,6 +4,12 @@ require "bundler/gem_tasks"
 require "standard/rake"
 require "rake/testtask"
 
+desc "Check Gemfile.lock for vulnerable gems (updates ruby-advisory-db first)"
+task :audit do
+  require "bundler/audit/cli"
+  Bundler::Audit::CLI.start(["check", "--update"])
+end
+
 Rake::TestTask.new(:test) do |t|
   t.libs << "test"
   t.libs << "lib"

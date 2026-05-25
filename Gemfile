@@ -12,6 +12,8 @@ gem "standard", "~> 1.3"
 
 gem "minitest", "~> 5.0"
 
+gem "bundler-audit", "~> 0.9", require: false
+
 gem "openai", require: false
 gem "nokogiri", require: false
 gem "cli-ui", require: false
