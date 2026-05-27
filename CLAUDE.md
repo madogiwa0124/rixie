@@ -101,6 +101,7 @@ Rixie::Error                      # base
   ├─ Rixie::ConfigurationError
   │    ├─ NoProviderError
   │    └─ UnknownProviderError
+  ├─ Rixie::NotImplementedError     # raised by abstract Base classes (Search, Store, Subscriber)
   ├─ Rixie::AgentError
   │    ├─ MaxStepsExceededError
   │    └─ ToolNotFoundError
@@ -148,7 +149,7 @@ lib/rixie/
   task.rb, run.rb           # Execution units
   context/                  # History, Plan — implement to_message
   strategy/                 # Simple, PlanExecute, ReAct
-  llm/                      # Client, Resolver, Adapter (OpenAI, Anthropic)
+  llm/                      # Client, Resolver, Adapter (OpenAI, Dummy)
   store/                    # Base, Memory, Null
   http/                     # Shared HTTP client with SSRF protection
   search/                   # Search providers (Base, DuckDuckGo, Wikipedia)

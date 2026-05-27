@@ -123,7 +123,7 @@ end
 session = Rixie::Session.new(
   instructions: "You are a helpful assistant.",
   provider:     "anthropic",
-  model:        "claude-opus-4-5"
+  model:        "claude-sonnet-4-6"
 )
 ```
 
