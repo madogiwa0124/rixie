@@ -10,42 +10,46 @@ module Rixie
       def subscribe(listener)
         listener.on(Event::TaskStart) { |envelope|
           e = envelope.event
-          @logger.info { "[Task] started: #{e.user_input.inspect} strategy=#{e.strategy.class.name} #{meta(envelope)}" }
+          log(envelope) { "[Task] started: #{e.user_input.inspect} strategy=#{e.strategy.class.name} #{meta(envelope)}" }
         }
         listener.on(Event::TaskEnd) { |envelope|
-          @logger.info { "[Task] #{envelope.event.status} #{meta(envelope)}" }
+          log(envelope) { "[Task] #{envelope.event.status} #{meta(envelope)}" }
         }
         listener.on(Event::RunStart) { |envelope|
-          @logger.info { "[Run] started: #{envelope.event.user_input.inspect} #{meta(envelope)}" }
+          log(envelope) { "[Run] started: #{envelope.event.user_input.inspect} #{meta(envelope)}" }
         }
         listener.on(Event::RunEnd) { |envelope|
-          @logger.info { "[Run] #{envelope.event.status} #{meta(envelope)}" }
+          log(envelope) { "[Run] #{envelope.event.status} #{meta(envelope)}" }
         }
         listener.on(Event::CompressionStart) { |envelope|
           e = envelope.event
-          @logger.info { "[Session] compression started: #{e.entry_count} entries (keep_recent: #{e.keep_recent}) #{meta(envelope)}" }
+          log(envelope) { "[Session] compression started: #{e.entry_count} entries (keep_recent: #{e.keep_recent}) #{meta(envelope)}" }
         }
         listener.on(Event::CompressionEnd) { |envelope|
           e = envelope.event
           msg = (e.status == "completed") ? "compression completed: #{e.entry_count} entries after" : "compression failed"
-          @logger.info { "[Session] #{msg} #{meta(envelope)}" }
+          log(envelope) { "[Session] #{msg} #{meta(envelope)}" }
         }
         listener.on(Event::LlmCallStart) { |envelope|
-          @logger.info { "[Agent] llm_call ##{envelope.event.step_count} #{meta(envelope)}" }
+          log(envelope) { "[Agent] llm_call ##{envelope.event.step_count} #{meta(envelope)}" }
         }
         listener.on(Event::ToolCallStart) { |envelope|
           e = envelope.event
-          @logger.info { "[Agent] tool_call: #{e.tool_call.name}(#{e.tool_call.arguments}) #{meta(envelope)}" }
+          log(envelope) { "[Agent] tool_call: #{e.tool_call.name}(#{e.tool_call.arguments}) #{meta(envelope)}" }
         }
         listener.on(Event::ToolCallEnd) { |envelope|
-          @logger.info { "[Agent] tool_result: #{envelope.event.result.content.inspect} #{meta(envelope)}" }
+          log(envelope) { "[Agent] tool_result: #{envelope.event.result.content.inspect} #{meta(envelope)}" }
         }
         listener.on(Event::Finished) { |envelope|
-          @logger.info { "[Agent] finish: #{envelope.event.content.inspect} #{meta(envelope)}" }
+          log(envelope) { "[Agent] finish: #{envelope.event.content.inspect} #{meta(envelope)}" }
         }
       end
 
       private
+
+      def log(envelope, &block)
+        @logger.public_send(EventSeverity.for(envelope.event), &block)
+      end
 
       def meta(envelope)
         parts = []

@@ -112,6 +112,34 @@ class SubscribersLoggerTest < Minitest::Test
     assert_match '"All done"', log_output.string
   end
 
+  def test_info_level_logger_filters_out_debug_events
+    log_output = StringIO.new
+    logger = ::Logger.new(log_output)
+    logger.level = ::Logger::INFO
+    make_subscriber(logger).subscribe(listener)
+
+    listener.emit(Rixie::Event::LlmCallStart.new(step_count: 1))
+    tool_call = Rixie::LLM::ToolCall.new(id: "c1", name: "get_weather", arguments: {})
+    listener.emit(Rixie::Event::ToolCallStart.new(tool_call: tool_call))
+
+    refute_match "llm_call", log_output.string
+    refute_match "tool_call:", log_output.string
+  end
+
+  def test_info_level_logger_emits_warn_for_tool_call_end_error
+    log_output = StringIO.new
+    logger = ::Logger.new(log_output)
+    logger.level = ::Logger::INFO
+    make_subscriber(logger).subscribe(listener)
+
+    tool_call = Rixie::LLM::ToolCall.new(id: "c1", name: "broken", arguments: {})
+    result = Rixie::ToolExecutor::Result.new(tool_call_id: "c1", content: "Error: boom", error: RuntimeError.new("boom"))
+    listener.emit(Rixie::Event::ToolCallEnd.new(tool_call: tool_call, result: result))
+
+    assert_match "WARN", log_output.string
+    assert_match "tool_result:", log_output.string
+  end
+
   def test_uses_injected_logger_not_global_config
     global_log = StringIO.new
     Rixie.config.logger = ::Logger.new(global_log)

@@ -2,6 +2,50 @@
 
 Rixie uses a subscriber pattern for observability. By default, a `Subscribers::Logger` is attached to every session, which logs events (task start/end, LLM calls, tool calls, etc.) via the configured `logger`.
 
+## Built-in subscribers
+
+| Subscriber | Output |
+| --- | --- |
+| `Subscribers::Logger` | Human-readable text — `[Task] started: "..."` style. Default. |
+| `Subscribers::JsonLogger` | One JSON object per line. Suitable for shipping to log aggregators. |
+
+Both wrap a `::Logger` instance and emit each event at a severity determined by `Subscribers::EventSeverity` — see [Log severity](#log-severity) below.
+
+```ruby
+Rixie.configure do |config|
+  config.default_subscribers = [
+    Rixie::Subscribers::JsonLogger.new(logger: Logger.new($stdout))
+  ]
+end
+```
+
+Each JSON record has the shape:
+
+```json
+{
+  "type": "tool_call_start",
+  "occurred_at": "2026-05-28T12:34:56+09:00",
+  "session_id": "...",
+  "task_id": "...",
+  "run_id": "...",
+  "seq": 7,
+  "event_id": "...",
+  "payload": { "tool_call": { "id": "c1", "name": "get_weather", "arguments": {"city": "Tokyo"} } }
+}
+```
+
+## Log severity
+
+`Subscribers::EventSeverity.for(event)` maps each event to a `::Logger` severity. Both built-in subscribers route through it, so the mapping cannot drift between them.
+
+| Severity | Events |
+| --- | --- |
+| `:debug` | `LlmCallStart`, `ToolCallStart`, `ToolCallEnd` (success) |
+| `:info`  | `TaskStart`, `TaskEnd`, `RunStart`, `RunEnd`, `Finished`, `CompressionStart`, `CompressionEnd` (completed) |
+| `:warn`  | `ToolCallEnd` (when `result.error?`), `CompressionEnd` (failed) |
+
+With the default `log_level = :info`, per-iteration noise (LLM calls, individual tool invocations) is silenced. Set `config.log_level = :debug` to see them, or `:warn` to surface only failures.
+
 ## Disabling the default logger
 
 ```ruby

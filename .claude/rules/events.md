@@ -4,7 +4,9 @@
 
 **`listener.emit` must only be written in public methods.**
 
-**`Rixie.logger` must not be called from internal classes.** All logging goes through `Rixie::Subscribers::Logger` via events. This keeps the observable behavior centralized and lets subscribers react to every notification.
+**`Rixie.logger` must not be called from internal classes.** All logging goes through `Rixie::Subscribers::Logger` (or `Subscribers::JsonLogger`) via events. This keeps the observable behavior centralized and lets subscribers react to every notification.
+
+**Per-event log severity lives in `Subscribers::EventSeverity`.** Both built-in subscribers (`Logger`, `JsonLogger`) dispatch through `EventSeverity.for(event)` rather than calling a fixed `@logger.info`. Adding a new event with a non-`:info` severity (e.g. a new failure event that should be `:warn`) means updating `EventSeverity` once — never duplicate the mapping inside individual subscribers.
 
 This ensures that all event emission points are visible by reading the public interface — no need to trace through private methods to understand when events fire.
 
