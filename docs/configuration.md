@@ -8,8 +8,11 @@ Rixie.configure do |config|
   config.store               = Rixie::Store::Memory.new
   config.logger              = Logger.new($stdout)
   config.log_level           = :info
-  config.default_subscribers = nil  # nil → [Subscribers::Logger]; [] → no subscribers
-                                    # nil means "unset — use the built-in default"; [] means "explicitly opt out"
+  config.log_format          = :text # :text → Subscribers::Logger (default); :json → Subscribers::JsonLogger.
+                                     # Both wrap config.logger automatically — no need to repeat it.
+  config.default_subscribers = nil   # nil → [default subscriber chosen by log_format]; [] → no subscribers
+                                     # nil means "unset — use the built-in default"; [] means "explicitly opt out"
+                                     # Pass an array to fully override (e.g. add an OpenTelemetry subscriber).
 end
 ```
 

@@ -11,10 +11,22 @@ Rixie uses a subscriber pattern for observability. By default, a `Subscribers::L
 
 Both wrap a `::Logger` instance and emit each event at a severity determined by `Subscribers::EventSeverity` — see [Log severity](#log-severity) below.
 
+To switch the default subscriber to JSON output, set `log_format`:
+
+```ruby
+Rixie.configure do |config|
+  config.logger     = Logger.new($stdout)
+  config.log_format = :json   # → Subscribers::JsonLogger wrapping config.logger
+end
+```
+
+If you need to fully control which subscribers are attached (e.g. to add an OpenTelemetry subscriber alongside the JSON logger), pass them via `default_subscribers` instead — that path bypasses `log_format`:
+
 ```ruby
 Rixie.configure do |config|
   config.default_subscribers = [
-    Rixie::Subscribers::JsonLogger.new(logger: Logger.new($stdout))
+    Rixie::Subscribers::JsonLogger.new(logger: Logger.new($stdout)),
+    OpenTelemetrySubscriber.new
   ]
 end
 ```

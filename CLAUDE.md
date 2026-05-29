@@ -128,7 +128,8 @@ Rixie.configure do |config|
   config.store               = Rixie::Store::Memory
   config.logger              = Logger.new($stdout)
   config.log_level           = :info                       # RIXIE_LOG_LEVEL
-  config.default_subscribers = nil                         # nil → [Subscribers::Logger]; [] → no subscribers; swap for [Subscribers::JsonLogger.new(logger:)] for JSON output
+  config.log_format          = :text                       # :text (default Subscribers::Logger) | :json (Subscribers::JsonLogger). Both receive config.logger automatically.
+  config.default_subscribers = nil                         # nil → [default subscriber chosen by log_format]; [] → no subscribers; pass an array to override entirely
 
   config.register_provider("my_proxy",
     adapter:  :openai,

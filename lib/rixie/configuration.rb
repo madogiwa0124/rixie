@@ -4,8 +4,10 @@ require "logger"
 
 module Rixie
   class Configuration
+    LOG_FORMATS = %i[text json].freeze
+
     attr_accessor :default_provider, :default_model, :default_max_steps, :store, :request_timeout, :default_max_tokens, :default_temperature, :default_subscribers
-    attr_reader :log_level, :logger
+    attr_reader :log_level, :logger, :log_format
 
     def log_level=(level)
       @log_level = level
@@ -17,12 +19,21 @@ module Rixie
       @logger&.level = ::Logger.const_get(@log_level.to_s.upcase)
     end
 
+    def log_format=(format)
+      sym = format.to_sym
+      unless LOG_FORMATS.include?(sym)
+        raise ConfigurationError, "Unknown log_format: #{format.inspect} (expected one of #{LOG_FORMATS.inspect})"
+      end
+      @log_format = sym
+    end
+
     def initialize
       @default_provider = nil
       @default_model = nil
       @default_max_steps = 10
       @store = nil
       @log_level = :info
+      @log_format = :text
       @logger = Logger.new($stdout).tap do |l|
         l.level = ::Logger.const_get(@log_level.to_s.upcase)
         l.formatter = proc { |severity, datetime, _progname, msg|

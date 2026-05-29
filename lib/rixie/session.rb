@@ -43,7 +43,7 @@ module Rixie
         stream_client
       end
 
-      default_subs = Rixie.config.default_subscribers || [Rixie::Subscribers::Logger.new(logger: Rixie.config.logger)]
+      default_subs = Rixie.config.default_subscribers || [default_log_subscriber]
       @subscribers = default_subs + subscribers
       @store = store || Rixie.config.store || Store::Memory.new
       @token_counter = token_counter || TokenCounter::DEFAULT
@@ -129,6 +129,13 @@ module Rixie
     end
 
     private
+
+    def default_log_subscriber
+      case Rixie.config.log_format
+      when :json then Rixie::Subscribers::JsonLogger.new(logger: Rixie.config.logger)
+      else Rixie::Subscribers::Logger.new(logger: Rixie.config.logger)
+      end
+    end
 
     def build_stream_subscriber(yielder)
       sub = Object.new

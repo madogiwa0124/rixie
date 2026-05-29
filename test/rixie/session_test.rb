@@ -433,6 +433,25 @@ class SessionTest < Minitest::Test
     refute subscribers.any? { |s| s.is_a?(Rixie::Subscribers::Logger) }
   end
 
+  def test_log_format_json_selects_json_logger_subscriber
+    Rixie.config.log_format = :json
+    session = make_session([finish_response])
+    subscribers = session.instance_variable_get(:@subscribers)
+    assert subscribers.any? { |s| s.is_a?(Rixie::Subscribers::JsonLogger) }
+    refute subscribers.any? { |s| s.instance_of?(Rixie::Subscribers::Logger) }
+  end
+
+  def test_log_format_defaults_to_text_logger_subscriber
+    session = make_session([finish_response])
+    subscribers = session.instance_variable_get(:@subscribers)
+    assert subscribers.any? { |s| s.instance_of?(Rixie::Subscribers::Logger) }
+    refute subscribers.any? { |s| s.is_a?(Rixie::Subscribers::JsonLogger) }
+  end
+
+  def test_invalid_log_format_raises_configuration_error
+    assert_raises(Rixie::ConfigurationError) { Rixie.config.log_format = :ltsv }
+  end
+
   def test_subscribers_are_passed_to_task
     received = []
     sub = Class.new(Rixie::Subscriber) do
