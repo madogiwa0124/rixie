@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-05-29
+
 Initial release. Requires Ruby 3.4 or newer.
 
 ### Added
@@ -34,4 +36,5 @@ Initial release. Requires Ruby 3.4 or newer.
   Each raises `Rixie::ConfigurationError` with an actionable message
   when used without the gem installed.
 
-[Unreleased]: https://github.com/madogiwa0124/rixie/tree/main
+[Unreleased]: https://github.com/madogiwa0124/rixie/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/madogiwa0124/rixie/releases/tag/v0.1.0
