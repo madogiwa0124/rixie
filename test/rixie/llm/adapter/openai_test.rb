@@ -7,13 +7,13 @@ require "rixie/llm/adapter/openai"
 class OpenAIAdapterTest < Minitest::Test
   EMPTY_RESULT = Struct.new(:choices).new([])
 
-  def build_adapter(max_tokens: nil, temperature: nil)
+  def build_adapter(temperature: nil, provider_params: nil)
     Rixie::LLM::Adapter::OpenAI.new(
       model: "gpt-4o",
       base_url: "https://api.openai.com/v1",
       api_key: "test",
-      max_tokens: max_tokens,
-      temperature: temperature
+      temperature: temperature,
+      provider_params: provider_params
     )
   end
 
@@ -68,20 +68,6 @@ class OpenAIAdapterTest < Minitest::Test
     assert_equal tool.input_schema, tools.first[:function][:parameters]
   end
 
-  def test_chat_does_not_include_max_tokens_when_nil
-    adapter = build_adapter
-    get_captured = stub_client(adapter)
-    adapter.chat([], tools: [])
-    refute get_captured.call.key?(:max_tokens)
-  end
-
-  def test_chat_includes_max_tokens_when_set
-    adapter = build_adapter(max_tokens: 1024)
-    get_captured = stub_client(adapter)
-    adapter.chat([], tools: [])
-    assert_equal 1024, get_captured.call[:max_tokens]
-  end
-
   def test_chat_does_not_include_temperature_when_nil
     adapter = build_adapter
     get_captured = stub_client(adapter)
@@ -94,6 +80,28 @@ class OpenAIAdapterTest < Minitest::Test
     get_captured = stub_client(adapter)
     adapter.chat([], tools: [])
     assert_equal 0.5, get_captured.call[:temperature]
+  end
+
+  def test_chat_merges_provider_params_into_request
+    adapter = build_adapter(provider_params: {max_completion_tokens: 500, seed: 42})
+    get_captured = stub_client(adapter)
+    adapter.chat([], tools: [])
+    assert_equal 500, get_captured.call[:max_completion_tokens]
+    assert_equal 42, get_captured.call[:seed]
+  end
+
+  def test_chat_does_not_include_provider_params_when_nil
+    adapter = build_adapter
+    get_captured = stub_client(adapter)
+    adapter.chat([], tools: [])
+    refute get_captured.call.key?(:max_completion_tokens)
+  end
+
+  def test_provider_params_take_precedence_over_standard_params
+    adapter = build_adapter(temperature: 0.3, provider_params: {temperature: 0.9})
+    get_captured = stub_client(adapter)
+    adapter.chat([], tools: [])
+    assert_equal 0.9, get_captured.call[:temperature]
   end
 
   def test_stream_emits_event_token_for_each_text_delta

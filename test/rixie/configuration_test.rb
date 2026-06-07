@@ -58,21 +58,15 @@ class ConfigurationTest < Minitest::Test
     assert_nil Rixie.config.store
   end
 
-  def test_default_max_tokens_is_nil
-    assert_nil Rixie.config.default_max_tokens
-  end
-
   def test_default_temperature_is_nil
     assert_nil Rixie.config.default_temperature
   end
 
-  def test_configure_block_sets_max_tokens_and_temperature
+  def test_configure_block_sets_temperature
     Rixie.configure do |config|
-      config.default_max_tokens = 2048
       config.default_temperature = 0.7
     end
 
-    assert_equal 2048, Rixie.config.default_max_tokens
     assert_equal 0.7, Rixie.config.default_temperature
   end
 end

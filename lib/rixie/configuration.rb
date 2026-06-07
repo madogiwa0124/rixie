@@ -6,7 +6,7 @@ module Rixie
   class Configuration
     LOG_FORMATS = %i[text json].freeze
 
-    attr_accessor :default_provider, :default_model, :default_max_steps, :store, :request_timeout, :default_max_tokens, :default_temperature, :default_subscribers
+    attr_accessor :default_provider, :default_model, :default_max_steps, :store, :request_timeout, :default_temperature, :default_subscribers, :default_provider_params
     attr_reader :log_level, :logger, :log_format
 
     def log_level=(level)
@@ -41,9 +41,9 @@ module Rixie
         }
       end
       @request_timeout = nil
-      @default_max_tokens = nil
       @default_temperature = nil
       @default_subscribers = nil
+      @default_provider_params = nil
       @custom_providers = {}
     end
 

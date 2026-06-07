@@ -6,13 +6,13 @@ module Rixie
   class Session
     attr_reader :agent, :tasks, :session_id, :stream_client
 
-    def initialize(agent: nil, stream_client: nil, instructions: nil, tools: [], model: nil, provider: nil, max_steps: nil, llm_client: nil, store: nil, initial_context: [], request_timeout: nil, max_tokens: nil, temperature: nil, token_counter: nil, parallel_tool_calls: false, subscribers: [])
+    def initialize(agent: nil, stream_client: nil, instructions: nil, tools: [], model: nil, provider: nil, max_steps: nil, llm_client: nil, store: nil, initial_context: [], request_timeout: nil, temperature: nil, token_counter: nil, parallel_tool_calls: false, subscribers: [], provider_params: nil)
       resolved_provider = provider || Rixie.config.default_provider
       resolved_model = model || Rixie.config.default_model
       resolved_timeout = request_timeout || Rixie.config.request_timeout
 
-      resolved_max_tokens = max_tokens || Rixie.config.default_max_tokens
       resolved_temperature = temperature || Rixie.config.default_temperature
+      resolved_provider_params = provider_params || Rixie.config.default_provider_params
 
       @agent = agent || Agent.new(
         instructions: instructions,
@@ -23,9 +23,9 @@ module Rixie
           model: resolved_model,
           provider: resolved_provider,
           request_timeout: resolved_timeout,
-          max_tokens: resolved_max_tokens,
           temperature: resolved_temperature,
-          parallel_tool_calls: parallel_tool_calls
+          parallel_tool_calls: parallel_tool_calls,
+          provider_params: resolved_provider_params
         )
       )
 
@@ -35,9 +35,9 @@ module Rixie
           provider: resolved_provider,
           stream: true,
           request_timeout: resolved_timeout,
-          max_tokens: resolved_max_tokens,
           temperature: resolved_temperature,
-          parallel_tool_calls: parallel_tool_calls
+          parallel_tool_calls: parallel_tool_calls,
+          provider_params: resolved_provider_params
         ) : nil)
       else
         stream_client
