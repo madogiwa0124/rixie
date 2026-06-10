@@ -7,7 +7,7 @@
 /spec/reports/
 /tmp/
 *.gem
-
+.env
 # Bundler-generated binstubs (use `bundle exec rake audit` instead)
 /bin/bundle-audit
 /bin/bundler-audit
