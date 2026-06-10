@@ -230,9 +230,7 @@ module Rixie
     end
 
     def resolve_langfuse_url
-      return @options[:langfuse_url] if @options.key?(:langfuse_url)
-      return ENV.fetch("LANGFUSE_BASE_URL", "http://localhost:3000") if ENV["LANGFUSE_PUBLIC_KEY"] && ENV["LANGFUSE_SECRET_KEY"]
-      nil
+      @options[:langfuse_url] if @options.key?(:langfuse_url)
     end
 
     def resolve_langfuse_subscriber
