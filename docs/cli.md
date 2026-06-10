@@ -59,6 +59,7 @@ CLI                     # REPL loop, option parsing, session lifecycle
 | `--provider PROVIDER` | LLM provider (`openai`, `ollama`, or any registered custom provider) |
 | `--model MODEL` | Model name |
 | `--instructions TEXT` | Override the default system prompt |
+| `--langfuse [BASE_URL]` | Enable Langfuse tracing (default base URL: `http://localhost:3000`). Requires `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` env vars. |
 | `--debug` | Print full LLM logs to stdout |
 | `--version` | Print version and exit |
 | `--help` | Print usage and exit |
@@ -76,6 +77,39 @@ Type `/` during a session to run a command. Tab completion is available for all 
 | `/help` | List available commands. |
 
 Type `exit` or press `Ctrl+C` to quit.
+
+## Langfuse tracing
+
+The CLI can send traces to [Langfuse](https://langfuse.com) automatically. Each conversation turn becomes a Trace with Run, Generation, and tool-call Spans nested inside it.
+
+**Auto-detect from environment variables** — if `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are set, tracing is enabled automatically:
+
+```bash
+export LANGFUSE_PUBLIC_KEY=pk-lf-...
+export LANGFUSE_SECRET_KEY=sk-lf-...
+export LANGFUSE_BASE_URL=http://localhost:3000   # optional, defaults to localhost:3000
+
+bundle exec rixie --provider openai --model gpt-4.1-mini
+```
+
+**Explicit flag** — use `--langfuse` to opt in, optionally overriding the base URL:
+
+```bash
+LANGFUSE_PUBLIC_KEY=pk-lf-... LANGFUSE_SECRET_KEY=sk-lf-... \
+  bundle exec rixie --provider openai --model gpt-4.1-mini \
+  --langfuse https://cloud.langfuse.com
+```
+
+When active, the welcome frame shows `Langfuse: <base_url>`. Traces appear in the Langfuse UI after each response.
+
+To run a local Langfuse instance, use the `docker-compose.yml` included at the project root:
+
+```bash
+docker compose up -d
+open http://localhost:3000   # create an account and generate API keys
+```
+
+See [Subscribers — Langfuse](subscribers.md#langfuse) for programmatic usage.
 
 ## Custom commands
 

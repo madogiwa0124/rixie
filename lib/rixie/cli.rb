@@ -98,6 +98,10 @@ module Rixie
           @options[:instructions] = v
         end
 
+        opts.on("--langfuse [BASE_URL]", "Enable Langfuse tracing (default: http://localhost:3000)") do |v|
+          @options[:langfuse_url] = v || ENV.fetch("LANGFUSE_BASE_URL", "http://localhost:3000")
+        end
+
         opts.on("--debug", "Enable debug logging") do
           @options[:debug] = true
         end
@@ -138,7 +142,10 @@ module Rixie
       provider = @options[:provider] || Rixie.config.default_provider
       model = @options[:model] || Rixie.config.default_model
 
-      renderer.welcome(version: Rixie::VERSION, provider: provider, model: model)
+      @langfuse_subscriber = resolve_langfuse_subscriber
+      langfuse_url = @langfuse_subscriber ? resolve_langfuse_url : nil
+
+      renderer.welcome(version: Rixie::VERSION, provider: provider, model: model, langfuse_url: langfuse_url)
 
       @current_model = @options[:model] || Rixie.config.default_model
       @session = build_session
@@ -210,14 +217,36 @@ module Rixie
     end
 
     def build_session(context: [])
+      subs = @langfuse_subscriber ? [@langfuse_subscriber] : []
       Rixie::Session.new(
         instructions: @options[:instructions],
         tools: default_tools + self.class.extra_tools,
         model: @current_model,
         provider: @options[:provider],
         initial_context: context,
-        parallel_tool_calls: true
+        parallel_tool_calls: true,
+        subscribers: subs
       )
+    end
+
+    def resolve_langfuse_url
+      return @options[:langfuse_url] if @options.key?(:langfuse_url)
+      return ENV.fetch("LANGFUSE_BASE_URL", "http://localhost:3000") if ENV["LANGFUSE_PUBLIC_KEY"] && ENV["LANGFUSE_SECRET_KEY"]
+      nil
+    end
+
+    def resolve_langfuse_subscriber
+      url = resolve_langfuse_url
+      return nil unless url
+
+      pk = ENV["LANGFUSE_PUBLIC_KEY"]
+      sk = ENV["LANGFUSE_SECRET_KEY"]
+      unless pk && sk
+        renderer.error("Langfuse: set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY to enable tracing")
+        return nil
+      end
+
+      Rixie::Subscribers::Langfuse.new(base_url: url, public_key: pk, secret_key: sk)
     end
 
     def default_tools

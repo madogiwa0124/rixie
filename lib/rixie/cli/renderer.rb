@@ -41,10 +41,11 @@ module Rixie
         puts_indented(message)
       end
 
-      def welcome(version:, provider:, model:)
+      def welcome(version:, provider:, model:, langfuse_url: nil)
         frame("Rixie v#{version}", color: :red) do
           info("Provider", provider)
           info("Model", model)
+          info("Langfuse", langfuse_url) if langfuse_url
           text("Type #{@terminal.warn("exit")} or press #{@terminal.warn("Ctrl+C")} to quit.")
         end
       end

@@ -8,6 +8,7 @@ Rixie uses a subscriber pattern for observability. By default, a `Subscribers::L
 | --- | --- |
 | `Subscribers::Logger` | Human-readable text — `[Task] started: "..."` style. Default. |
 | `Subscribers::JsonLogger` | One JSON object per line. Suitable for shipping to log aggregators. |
+| `Subscribers::Langfuse` | Sends traces to a [Langfuse](https://langfuse.com) instance via the ingestion API. |
 
 Both wrap a `::Logger` instance and emit each event at a severity determined by `Subscribers::EventSeverity` — see [Log severity](#log-severity) below.
 
@@ -57,6 +58,60 @@ Each JSON record has the shape:
 | `:warn`  | `ToolCallEnd` (when `result.error?`), `CompressionEnd` (failed) |
 
 With the default `log_level = :info`, per-iteration noise (LLM calls, individual tool invocations) is silenced. Set `config.log_level = :debug` to see them, or `:warn` to surface only failures.
+
+## Langfuse
+
+`Subscribers::Langfuse` maps Rixie events to Langfuse's trace hierarchy and flushes them as a single batch on `TaskEnd`.
+
+```
+Task  → Langfuse Trace
+  Run   → Span
+    LLM call   → Generation  (model, provider, input/output tokens)
+    Tool call  → Span        (arguments, result, error level)
+```
+
+### Setup
+
+Start a local Langfuse instance with Docker Compose (a `docker-compose.yml` is included at the repo root), or use [Langfuse Cloud](https://cloud.langfuse.com) for a hosted option.
+
+```bash
+docker compose up -d     # local only
+```
+
+### Usage
+
+```ruby
+Rixie.configure do |config|
+  config.default_subscribers = [
+    Rixie::Subscribers::Langfuse.new(
+      base_url:   ENV["LANGFUSE_BASE_URL"] || "http://localhost:3000",
+      public_key: ENV["LANGFUSE_PUBLIC_KEY"],
+      secret_key: ENV["LANGFUSE_SECRET_KEY"]
+    )
+  ]
+end
+```
+
+If you want to keep the default logger alongside Langfuse:
+
+```ruby
+Rixie.configure do |config|
+  config.default_subscribers = [
+    Rixie::Subscribers::Logger.new(logger: config.logger),
+    Rixie::Subscribers::Langfuse.new(
+      base_url:   ENV.fetch("LANGFUSE_BASE_URL", "http://localhost:3000"),
+      public_key: ENV["LANGFUSE_PUBLIC_KEY"],
+      secret_key: ENV["LANGFUSE_SECRET_KEY"]
+    )
+  ]
+end
+```
+
+The subscriber is also available in the [CLI](cli.md) via the `--langfuse` flag or environment variables — see [CLI — Langfuse tracing](cli.md#langfuse-tracing).
+
+### Flush behavior
+
+All ingestion events for a Task are buffered in memory and sent to `POST /api/public/ingestion` in a single HTTP request when `TaskEnd` fires. If the request fails (network error or non-2xx response), the error is logged at `warn` level and the agent continues normally — tracing failures are never fatal.
 
 ## Disabling the default logger
 
