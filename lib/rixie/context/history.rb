@@ -22,7 +22,7 @@ module Rixie
           end
         end
 
-        messages << Message::Assistant.new(content: @output, tool_calls: [])
+        messages << Message::Assistant.new(content: @output, tool_calls: []) unless @output.nil?
         messages
       end
 
