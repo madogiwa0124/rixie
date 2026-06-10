@@ -52,7 +52,7 @@ Each JSON record has the shape:
 
 | Severity | Events |
 | --- | --- |
-| `:debug` | `LlmCallStart`, `ToolCallStart`, `ToolCallEnd` (success) |
+| `:debug` | `LlmCallStart`, `LlmCallEnd`, `ToolCallStart`, `ToolCallEnd` (success) |
 | `:info`  | `TaskStart`, `TaskEnd`, `RunStart`, `RunEnd`, `Finished`, `CompressionStart`, `CompressionEnd` (completed) |
 | `:warn`  | `ToolCallEnd` (when `result.error?`), `CompressionEnd` (failed) |
 
@@ -68,66 +68,97 @@ end
 
 ## Adding custom subscribers
 
-Implement `Rixie::Subscriber` and pass instances to `Session`. Here's an example that creates [OpenTelemetry](https://opentelemetry.io/) spans for each task and tool call:
+Implement `Rixie::Subscriber` and pass instances to `Session`. Here's an example that creates [OpenTelemetry](https://opentelemetry.io/) spans following the [GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/):
 
 ```ruby
-require "json"
 require "opentelemetry/sdk"
 
 class OpenTelemetrySubscriber < Rixie::Subscriber
-  def initialize(tracer: OpenTelemetry.tracer_provider.tracer("rixie"))
+  def initialize(tracer: OpenTelemetry.tracer_provider.tracer("my-app"))
     @tracer = tracer
   end
 
   def subscribe(listener)
-    task_spans = {}
+    task_data = {}
+    run_data  = {}
+    llm_spans = {}
     tool_spans = {}
 
     listener.on(Rixie::Event::TaskStart) do |envelope|
-      span = @tracer.start_span("rixie.task", attributes: {
-        "rixie.session_id"    => envelope.session_id,
-        "rixie.task_id"       => envelope.task_id,
-        "rixie.task.input"    => envelope.event.user_input,
-        "rixie.task.strategy" => envelope.event.strategy.class.name
+      span = @tracer.start_span("invoke_agent", kind: :client, attributes: {
+        "gen_ai.operation.name" => "invoke_agent"
       })
       ctx = OpenTelemetry::Trace.context_with_span(span)
-      task_spans[envelope.task_id] = {span: span, ctx: ctx}
+      task_data[envelope.task_id] = {span: span, ctx: ctx}
     end
 
     listener.on(Rixie::Event::TaskEnd) do |envelope|
-      entry = task_spans.delete(envelope.task_id)
+      entry = task_data.delete(envelope.task_id)
       next unless entry
-
       span = entry[:span]
-      if envelope.event.status == "failed"
-        span.status = OpenTelemetry::Trace::Status.error("task failed")
-      end
-      span.set_attribute("rixie.task.status", envelope.event.status)
+      span.status = envelope.event.status == "completed" \
+        ? OpenTelemetry::Trace::Status.ok
+        : OpenTelemetry::Trace::Status.error("task #{envelope.event.status}")
+      span.finish
+    end
+
+    listener.on(Rixie::Event::RunStart) do |envelope|
+      parent_ctx = task_data[envelope.task_id]&.fetch(:ctx)
+      span = @tracer.start_span("run", with_parent: parent_ctx, kind: :internal)
+      ctx = OpenTelemetry::Trace.context_with_span(span)
+      run_data[envelope.run_id] = {span: span, ctx: ctx}
+    end
+
+    listener.on(Rixie::Event::RunEnd) do |envelope|
+      entry = run_data.delete(envelope.run_id)
+      next unless entry
+      span = entry[:span]
+      span.status = envelope.event.status == "completed" \
+        ? OpenTelemetry::Trace::Status.ok
+        : OpenTelemetry::Trace::Status.error("run #{envelope.event.status}")
+      span.finish
+    end
+
+    listener.on(Rixie::Event::LlmCallStart) do |envelope|
+      e = envelope.event
+      parent_ctx = run_data[envelope.run_id]&.fetch(:ctx)
+      span = @tracer.start_span("chat #{e.model}", with_parent: parent_ctx, kind: :client, attributes: {
+        "gen_ai.operation.name" => "chat",
+        "gen_ai.system"         => e.provider,
+        "gen_ai.request.model"  => e.model
+      }.compact)
+      llm_spans["#{envelope.run_id}:#{e.step_count}"] = span
+    end
+
+    listener.on(Rixie::Event::LlmCallEnd) do |envelope|
+      e    = envelope.event
+      span = llm_spans.delete("#{envelope.run_id}:#{e.step_count}")
+      next unless span
+      span.set_attribute("gen_ai.usage.input_tokens",        e.usage[:input_tokens])  if e.usage[:input_tokens]
+      span.set_attribute("gen_ai.usage.output_tokens",       e.usage[:output_tokens]) if e.usage[:output_tokens]
+      span.set_attribute("gen_ai.response.finish_reasons",   [e.finish_reason].compact) if e.finish_reason
       span.finish
     end
 
     listener.on(Rixie::Event::ToolCallStart) do |envelope|
-      tc      = envelope.event.tool_call
-      task_ctx = task_spans[envelope.task_id]&.fetch(:ctx)
-      span = @tracer.start_span("rixie.tool_call",
-        with_parent: task_ctx,
-        attributes: {
-          "rixie.tool.name"      => tc.name,
-          "rixie.tool.arguments" => tc.arguments.to_json
-        }
-      )
+      tc = envelope.event.tool_call
+      parent_ctx = run_data[envelope.run_id]&.fetch(:ctx)
+      span = @tracer.start_span("execute_tool #{tc.name}", with_parent: parent_ctx, kind: :internal, attributes: {
+        "gen_ai.operation.name" => "execute_tool",
+        "gen_ai.tool.name"      => tc.name,
+        "gen_ai.tool.call.id"   => tc.id
+      })
       tool_spans[tc.id] = span
     end
 
     listener.on(Rixie::Event::ToolCallEnd) do |envelope|
-      tc     = envelope.event.tool_call
       result = envelope.event.result
-      span   = tool_spans.delete(tc.id)
-      span&.set_attribute("rixie.tool.result", result.content)
-      if result.error?
-        span&.status = OpenTelemetry::Trace::Status.error(result.error.message)
-      end
-      span&.finish
+      span   = tool_spans.delete(envelope.event.tool_call.id)
+      next unless span
+      span.status = result.error? \
+        ? OpenTelemetry::Trace::Status.error(result.error.message)
+        : OpenTelemetry::Trace::Status.ok
+      span.finish
     end
   end
 end
@@ -136,6 +167,16 @@ session = Rixie::Session.new(
   instructions: "You are a helpful assistant.",
   subscribers:  [OpenTelemetrySubscriber.new]
 )
+```
+
+This produces a span tree like:
+
+```
+invoke_agent                          # Task
+  └─ run                             # Run
+       └─ chat gpt-4.1               # LlmCall #1
+       └─ execute_tool web_search    # ToolCall
+       └─ chat gpt-4.1               # LlmCall #2
 ```
 
 Each event is delivered as an `Event::Envelope` that includes the domain event plus metadata:
@@ -172,7 +213,8 @@ All events below are delivered to subscribers via `listener.on(EventClass) { |en
 
 | Event | Fields | Emitted when |
 | --- | --- | --- |
-| `Event::LlmCallStart` | `step_count: Integer` | Before each LLM call inside the think loop |
+| `Event::LlmCallStart` | `step_count: Integer`, `model: String \| nil`, `provider: String \| nil` | Before each LLM call inside the think loop |
+| `Event::LlmCallEnd` | `step_count: Integer`, `usage: Hash`, `finish_reason: String \| nil` | After each LLM call returns. `usage` always has `:input_tokens` and `:output_tokens` — the provider's reported values when available, otherwise a character-length estimate (1 token ≈ 4 chars). |
 | `Event::ThoughtCompleted` | `thought: Agent::Thought` | The LLM returned a `:finish` response — not emitted for tool-call iterations |
 | `Event::Finished` | `content: String \| nil` | Exactly once per `Agent#think` return. `nil` on the `return_direct` exit path. |
 
@@ -203,10 +245,20 @@ Within a single `:tool_call` iteration of the agent loop:
 
 ```
 LlmCallStart
+  LlmCallEnd
   → ToolCallStart × N   (sequential, all before any execution)
   → tool execution      (parallel or sequential)
   → ToolCallEnd × N     (sequential, in tool_calls order)
   → ToolCallsCompleted
 ```
 
-`Finished` is always the last event for a Run. `ThoughtCompleted` fires only on the `:finish` exit path, immediately before `Finished`.
+On the `:finish` path:
+
+```
+LlmCallStart
+  LlmCallEnd
+  ThoughtCompleted
+  Finished
+```
+
+`Finished` is always the last event for a Run.

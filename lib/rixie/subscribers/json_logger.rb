@@ -32,7 +32,12 @@ module Rixie
           emit(envelope, "compression_end", status: e.status, entry_count: e.entry_count)
         }
         listener.on(Event::LlmCallStart) { |envelope|
-          emit(envelope, "llm_call_start", step_count: envelope.event.step_count)
+          e = envelope.event
+          emit(envelope, "llm_call_start", step_count: e.step_count, model: e.model, provider: e.provider)
+        }
+        listener.on(Event::LlmCallEnd) { |envelope|
+          e = envelope.event
+          emit(envelope, "llm_call_end", step_count: e.step_count, usage: e.usage, finish_reason: e.finish_reason)
         }
         listener.on(Event::ToolCallStart) { |envelope|
           tc = envelope.event.tool_call

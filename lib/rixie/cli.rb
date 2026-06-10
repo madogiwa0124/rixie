@@ -128,7 +128,12 @@ module Rixie
     end
 
     def run
-      Rixie.config.logger.reopen(@options[:debug] ? $stderr : File::NULL)
+      if @options[:debug]
+        Rixie.config.logger.reopen($stderr)
+        Rixie.config.log_level = :debug
+      else
+        Rixie.config.logger.reopen(File::NULL)
+      end
 
       provider = @options[:provider] || Rixie.config.default_provider
       model = @options[:model] || Rixie.config.default_model

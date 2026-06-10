@@ -93,15 +93,32 @@ class SubscribersJsonLoggerTest < Minitest::Test
     assert_equal 5, record["payload"]["entry_count"]
   end
 
-  def test_logs_llm_call_start_with_step_count
+  def test_logs_llm_call_start_with_step_count_model_and_provider
     logger, log_output = make_logger
     make_subscriber(logger).subscribe(listener)
 
-    listener.emit(Rixie::Event::LlmCallStart.new(step_count: 3))
+    listener.emit(Rixie::Event::LlmCallStart.new(step_count: 3, model: "gpt-4o", provider: "openai"))
 
     record = last_record(log_output)
     assert_equal "llm_call_start", record["type"]
     assert_equal 3, record["payload"]["step_count"]
+    assert_equal "gpt-4o", record["payload"]["model"]
+    assert_equal "openai", record["payload"]["provider"]
+  end
+
+  def test_logs_llm_call_end_with_step_count_usage_and_finish_reason
+    logger, log_output = make_logger
+    make_subscriber(logger).subscribe(listener)
+
+    usage = {input_tokens: 120, output_tokens: 40}
+    listener.emit(Rixie::Event::LlmCallEnd.new(step_count: 2, usage: usage, finish_reason: "stop"))
+
+    record = last_record(log_output)
+    assert_equal "llm_call_end", record["type"]
+    assert_equal 2, record["payload"]["step_count"]
+    assert_equal "stop", record["payload"]["finish_reason"]
+    assert_equal 120, record["payload"]["usage"]["input_tokens"]
+    assert_equal 40, record["payload"]["usage"]["output_tokens"]
   end
 
   def test_logs_tool_call_start_with_tool_call_fields
@@ -177,7 +194,7 @@ class SubscribersJsonLoggerTest < Minitest::Test
     logger, log_output = make_logger
     make_subscriber(logger).subscribe(listener)
 
-    listener.emit(Rixie::Event::LlmCallStart.new(step_count: 1))
+    listener.emit(Rixie::Event::LlmCallStart.new(step_count: 1, model: "gpt-4o", provider: "openai"))
     listener.emit(Rixie::Event::Finished.new(content: "x"))
 
     lines = log_output.string.lines.map(&:strip).reject(&:empty?)
@@ -192,7 +209,7 @@ class SubscribersJsonLoggerTest < Minitest::Test
     logger.level = ::Logger::INFO
     make_subscriber(logger).subscribe(listener)
 
-    listener.emit(Rixie::Event::LlmCallStart.new(step_count: 1))
+    listener.emit(Rixie::Event::LlmCallStart.new(step_count: 1, model: "gpt-4o", provider: "openai"))
     tool_call = Rixie::LLM::ToolCall.new(id: "c1", name: "x", arguments: {})
     listener.emit(Rixie::Event::ToolCallStart.new(tool_call: tool_call))
 

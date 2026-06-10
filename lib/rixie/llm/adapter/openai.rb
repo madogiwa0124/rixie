@@ -123,6 +123,8 @@ module Rixie
         end
 
         def normalize(result)
+          usage_raw = result.respond_to?(:usage) && result.usage
+          usage_hash = usage_raw ? {"prompt_tokens" => usage_raw.prompt_tokens, "completion_tokens" => usage_raw.completion_tokens} : nil
           {
             "choices" => (result.choices || []).map do |choice|
               message = choice.message
@@ -138,7 +140,8 @@ module Rixie
                   end
                 }
               }
-            end
+            end,
+            "usage" => usage_hash
           }
         end
       end

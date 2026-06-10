@@ -14,11 +14,13 @@ module Rixie
       resolved_temperature = temperature || Rixie.config.default_temperature
       resolved_provider_params = provider_params || Rixie.config.default_provider_params
 
+      @token_counter = token_counter || TokenCounter::DEFAULT
       @agent = agent || Agent.new(
         instructions: instructions,
         tools: tools,
         max_steps: max_steps || Rixie.config.default_max_steps,
         parallel_tool_calls: parallel_tool_calls,
+        token_counter: @token_counter,
         llm_client: llm_client || LLM::Client.new(
           model: resolved_model,
           provider: resolved_provider,
@@ -46,7 +48,6 @@ module Rixie
       default_subs = Rixie.config.default_subscribers || [default_log_subscriber]
       @subscribers = default_subs + subscribers
       @store = store || Rixie.config.store || Store::Memory.new
-      @token_counter = token_counter || TokenCounter::DEFAULT
       @initial_context = initial_context
       @session_id = SecureRandom.uuid
       @tasks = []

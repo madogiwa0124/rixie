@@ -8,7 +8,7 @@ module Rixie
     module EventSeverity
       def self.for(event)
         case event
-        when Event::LlmCallStart, Event::ToolCallStart
+        when Event::LlmCallStart, Event::LlmCallEnd, Event::ToolCallStart
           :debug
         when Event::ToolCallEnd
           event.result.error? ? :warn : :debug

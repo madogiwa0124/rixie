@@ -11,13 +11,14 @@ module Rixie
 
     DEFAULT_MAX_STEPS = 10
 
-    attr_reader :instructions, :tools, :llm_client, :parallel_tool_calls
+    attr_reader :instructions, :tools, :llm_client, :parallel_tool_calls, :token_counter
 
-    def initialize(instructions:, llm_client:, tools: [], max_steps: nil, parallel_tool_calls: false)
+    def initialize(instructions:, llm_client:, tools: [], max_steps: nil, parallel_tool_calls: false, token_counter: nil)
       @instructions = instructions
       @tools = tools
       @max_steps = max_steps || DEFAULT_MAX_STEPS
       @parallel_tool_calls = parallel_tool_calls
+      @token_counter = token_counter || TokenCounter::DEFAULT
       @tool_executor = ToolExecutor.new(tools: tools)
       @llm_client = llm_client
     end
@@ -28,7 +29,8 @@ module Rixie
         tools: @tools,
         max_steps: @max_steps,
         llm_client: llm_client,
-        parallel_tool_calls: @parallel_tool_calls
+        parallel_tool_calls: @parallel_tool_calls,
+        token_counter: @token_counter
       )
     end
 
@@ -39,8 +41,10 @@ module Rixie
 
       loop do
         step_count += 1
-        listener.emit(Event::LlmCallStart.new(step_count: step_count))
-        thought = llm_call(messages:) { |event| listener.emit(event) }
+        listener.emit(Event::LlmCallStart.new(step_count: step_count, model: @llm_client.model, provider: @llm_client.provider))
+        thought, response = llm_call(messages:) { |event| listener.emit(event) }
+        usage = response.usage || calculate_token_usage(messages, response)
+        listener.emit(Event::LlmCallEnd.new(step_count: step_count, usage: usage, finish_reason: response.finish_reason))
 
         if thought.tool_call?
           raise MaxStepsExceededError, "Max steps (#{@max_steps}) exceeded" if tool_call_count >= @max_steps
@@ -73,6 +77,12 @@ module Rixie
     end
 
     private
+
+    def calculate_token_usage(messages, response)
+      input_tokens = @token_counter.call(messages)
+      output_tokens = @token_counter.call([response])
+      {input_tokens: input_tokens, output_tokens: output_tokens}
+    end
 
     def call_thought_tools(on_start:, thought:, on_end:, parallel:)
       thought.tool_calls.each { |tc| on_start.call(tc) }
@@ -112,11 +122,12 @@ module Rixie
     def llm_call(messages:, &on_event)
       response = @llm_client.call(messages, tools: @tool_executor.definitions) { |event| on_event.call(event) }
       raise LLM::ResponseTruncatedError, "LLM response truncated (finish_reason=length)" if response.finish_reason == "length"
-      if response.has_tool_calls?
+      thought = if response.has_tool_calls?
         Thought.new(type: :tool_call, content: response.content, tool_calls: response.tool_calls, tool_results: nil)
       else
         Thought.new(type: :finish, content: response.content, tool_calls: [], tool_results: nil)
       end
+      [thought, response]
     end
   end
 end

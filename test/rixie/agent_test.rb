@@ -455,6 +455,8 @@ class AgentTest < Minitest::Test
 
     assert_equal 1, received.size
     assert_equal 1, received.first.event.step_count
+    assert_equal "gpt-4o", received.first.event.model
+    assert_equal "openai", received.first.event.provider
   end
 
   def test_think_llm_call_start_step_count_increments_across_tool_call_loops
@@ -471,5 +473,78 @@ class AgentTest < Minitest::Test
     assert_equal 2, received.size
     assert_equal 1, received[0].event.step_count
     assert_equal 2, received[1].event.step_count
+  end
+
+  def test_think_emits_llm_call_end_after_each_llm_call
+    received = []
+    listener.on(Rixie::Event::LlmCallEnd) { |envelope| received << envelope }
+
+    agent = make_agent([finish_response(content: "Done")])
+    agent.think(messages: [], listener: listener)
+
+    assert_equal 1, received.size
+    e = received.first.event
+    assert_equal 1, e.step_count
+    assert_kind_of Hash, e.usage
+    assert e.usage.key?(:input_tokens)
+    assert e.usage.key?(:output_tokens)
+  end
+
+  def test_think_llm_call_end_step_count_increments_across_tool_call_loops
+    received = []
+    listener.on(Rixie::Event::LlmCallEnd) { |envelope| received << envelope }
+
+    tool = simple_tool(name: "search", result: "ok")
+    agent = make_agent(
+      [tool_call_response(id: "c1", name: "search"), finish_response],
+      tools: [tool]
+    )
+    agent.think(messages: [], listener: listener)
+
+    assert_equal 2, received.size
+    assert_equal 1, received[0].event.step_count
+    assert_equal 2, received[1].event.step_count
+  end
+
+  def test_think_llm_call_end_uses_provider_usage_when_present
+    received = []
+    listener.on(Rixie::Event::LlmCallEnd) { |envelope| received << envelope }
+
+    response_with_usage = {
+      "choices" => [{"finish_reason" => "stop", "message" => {"content" => "Done", "tool_calls" => nil}}],
+      "usage" => {"prompt_tokens" => 150, "completion_tokens" => 30}
+    }
+    agent = make_agent([response_with_usage])
+    agent.think(messages: [], listener: listener)
+
+    e = received.first.event
+    assert_equal 150, e.usage[:input_tokens]
+    assert_equal 30, e.usage[:output_tokens]
+  end
+
+  def test_think_llm_call_end_uses_estimated_usage_when_provider_omits_it
+    received = []
+    listener.on(Rixie::Event::LlmCallEnd) { |envelope| received << envelope }
+
+    agent = make_agent([finish_response(content: "Done")])
+    messages = [Rixie::Message::User.new(content: "Hello world")]
+    agent.think(messages: messages, listener: listener)
+
+    e = received.first.event
+    assert_kind_of Integer, e.usage[:input_tokens]
+    assert_kind_of Integer, e.usage[:output_tokens]
+    assert e.usage[:input_tokens] >= 0
+    assert e.usage[:output_tokens] >= 0
+  end
+
+  def test_think_emits_llm_call_end_before_finished
+    events = []
+    listener.on(Rixie::Event::LlmCallEnd) { |envelope| events << :llm_call_end }
+    listener.on(Rixie::Event::Finished) { |envelope| events << :finished }
+
+    agent = make_agent([finish_response(content: "Done")])
+    agent.think(messages: [], listener: listener)
+
+    assert_equal [:llm_call_end, :finished], events
   end
 end

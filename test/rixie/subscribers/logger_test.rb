@@ -67,14 +67,29 @@ class SubscribersLoggerTest < Minitest::Test
     assert_match "[Run] completed", log_output.string
   end
 
-  def test_logs_llm_call_start_with_step_count
+  def test_logs_llm_call_start_with_step_count_model_and_provider
     logger, log_output = make_logger
     sub = make_subscriber(logger)
     sub.subscribe(listener)
 
-    listener.emit(Rixie::Event::LlmCallStart.new(step_count: 2))
+    listener.emit(Rixie::Event::LlmCallStart.new(step_count: 2, model: "gpt-4o", provider: "openai"))
 
     assert_match "[Agent] llm_call #2", log_output.string
+    assert_match "model=gpt-4o", log_output.string
+    assert_match "provider=openai", log_output.string
+  end
+
+  def test_logs_llm_call_end_with_step_count_and_token_usage
+    logger, log_output = make_logger
+    sub = make_subscriber(logger)
+    sub.subscribe(listener)
+
+    listener.emit(Rixie::Event::LlmCallEnd.new(step_count: 1, usage: {input_tokens: 100, output_tokens: 50}, finish_reason: "stop"))
+
+    assert_match "[Agent] llm_call_end #1", log_output.string
+    assert_match "input_tokens=100", log_output.string
+    assert_match "output_tokens=50", log_output.string
+    assert_match "finish_reason=stop", log_output.string
   end
 
   def test_logs_tool_call_start_with_tool_name_and_arguments
@@ -118,7 +133,7 @@ class SubscribersLoggerTest < Minitest::Test
     logger.level = ::Logger::INFO
     make_subscriber(logger).subscribe(listener)
 
-    listener.emit(Rixie::Event::LlmCallStart.new(step_count: 1))
+    listener.emit(Rixie::Event::LlmCallStart.new(step_count: 1, model: "gpt-4o", provider: "openai"))
     tool_call = Rixie::LLM::ToolCall.new(id: "c1", name: "get_weather", arguments: {})
     listener.emit(Rixie::Event::ToolCallStart.new(tool_call: tool_call))
 

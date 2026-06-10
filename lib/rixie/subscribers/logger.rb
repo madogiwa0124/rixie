@@ -31,7 +31,12 @@ module Rixie
           log(envelope) { "[Session] #{msg} #{meta(envelope)}" }
         }
         listener.on(Event::LlmCallStart) { |envelope|
-          log(envelope) { "[Agent] llm_call ##{envelope.event.step_count} #{meta(envelope)}" }
+          e = envelope.event
+          log(envelope) { "[Agent] llm_call ##{e.step_count} model=#{e.model} provider=#{e.provider} #{meta(envelope)}" }
+        }
+        listener.on(Event::LlmCallEnd) { |envelope|
+          e = envelope.event
+          log(envelope) { "[Agent] llm_call_end ##{e.step_count} input_tokens=#{e.usage[:input_tokens]} output_tokens=#{e.usage[:output_tokens]} finish_reason=#{e.finish_reason} #{meta(envelope)}" }
         }
         listener.on(Event::ToolCallStart) { |envelope|
           e = envelope.event
