@@ -64,7 +64,7 @@ end
 Integration tests can run against real providers by setting env vars:
 
 ```bash
-RIXIE_TEST_PROVIDER=anthropic RIXIE_TEST_MODEL=claude-haiku-4-5 bundle exec rake test:integration
+RIXIE_TEST_PROVIDER=openai RIXIE_TEST_MODEL=gpt-4.1-mini bundle exec rake test:integration
 RIXIE_TEST_BASE_URL=http://localhost:11434/v1 RIXIE_TEST_MODEL=qwen3.5:4b bundle exec rake test:integration
 ```
 
@@ -82,7 +82,7 @@ end
 
 ## Fake Gems
 
-`test/support/fake_gems/` contains minimal stubs of `openai` and `anthropic`. These allow `require "openai"` / `require "anthropic"` in adapter code without installing the real gems. The unit test load path includes this directory (`test_helper.rb`).
+`test/support/fake_gems/` contains a minimal stub of `openai`. It allows `require "openai"` in adapter code without installing the real gem. The unit test load path includes this directory (`test_helper.rb`).
 
 Do not add logic to fake gems. They exist only to satisfy `require` at load time.
 

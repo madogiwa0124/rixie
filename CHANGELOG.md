@@ -14,6 +14,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Use this to supply model-specific parameters such as `max_completion_tokens:` for GPT-5
   or `seed:` for reproducibility.
 
+### Fixed
+
+- `LLM::Client::Resolver` raised `NameError` when resolving a provider registered with a
+  custom adapter class while the OpenAI adapter had never been loaded.
+- SSRF protection in `Http::Client` now blocks link-local (`169.254.0.0/16`, including
+  cloud metadata endpoints), CGNAT (`100.64.0.0/10`), multicast, and reserved ranges,
+  for both IPv4 and IPv6. The hostname/IP classifier now uses `IPAddr` instead of a regex.
+- Malformed JSON in tool-call arguments returned by the LLM now raises `Rixie::LLM::Error`
+  instead of an unwrapped `JSON::ParserError`.
+- `PromptBuilder` no longer emits a system message with `null` content when `instructions`
+  is nil or empty (real providers reject such messages).
+- `Session#live` raises a descriptive `Rixie::ConfigurationError` when no stream client is
+  available (previously crashed with `NoMethodError` on the first LLM call).
+
 ### Removed
 
 - `max_tokens:` parameter on `Session` / `LLM::Client` and `config.default_max_tokens` —

@@ -57,13 +57,18 @@ def call_thought_tools(thought:, listener:, parallel:)  # ❌
 - **Traceability**: no need to grep private methods to find where events fire.
 - **Consistency**: event emission is a public concern (observable behavior), not an implementation detail.
 
-## Events Emitted by Agent
+## Emitted Events
 
 | Event | Payload | When |
 |---|---|---|
+| `Event::TaskStart` | `{ user_input:, strategy: }` | At the start of `Task#execute` |
+| `Event::TaskEnd` | `{ output:, status: }` | When `Task#execute` completes (`"completed"`) or fails (`"failed"`) |
+| `Event::RunStart` | `{ user_input: }` | At the start of `Run#execute` |
+| `Event::RunEnd` | `{ output:, status: }` | When `Run#execute` completes or fails |
 | `Event::CompressionStart` | `{ entry_count:, keep_recent: }` | Before context compression in `Session#compress!` |
 | `Event::CompressionEnd` | `{ status:, entry_count: }` | After context compression completes or fails |
-| `Event::LlmCallStart` | `{ step_count: }` | Before each LLM call |
+| `Event::LlmCallStart` | `{ step_count:, model:, provider: }` | Before each LLM call |
+| `Event::LlmCallEnd` | `{ step_count:, usage:, finish_reason: }` | After each LLM call returns. `usage` is `{input_tokens:, output_tokens:}` (provider-reported, or token_counter approximation) |
 | `Event::ToolCallStart` | `{ tool_call: }` | Once per tool call, before any execution |
 | `Event::ToolCallEnd` | `{ tool_call:, result: ToolExecutor::Result }` | Once per tool call, after execution (in `tool_calls` order). `result.error?` is true if the tool raised. |
 | `Event::ToolCallsCompleted` | `{ tool_calls:, tool_results: }` | After all tool calls in a single `:tool_call` iteration |

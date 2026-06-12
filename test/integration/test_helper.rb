@@ -9,8 +9,8 @@ module Integration
   module Helper
     # Returns true when running against a real LLM provider.
     #
-    # Built-in provider (OpenAI, Anthropic):
-    #   RIXIE_TEST_PROVIDER=anthropic RIXIE_TEST_MODEL=claude-haiku-4-5 bundle exec rake test:integration
+    # Built-in provider (openai, ollama):
+    #   RIXIE_TEST_PROVIDER=openai RIXIE_TEST_MODEL=gpt-4.1-mini bundle exec rake test:integration
     #
     # OpenAI-compatible endpoint (Ollama, etc.):
     #   RIXIE_TEST_BASE_URL=http://localhost:11434/v1 RIXIE_TEST_MODEL=qwen3.5:4b bundle exec rake test:integration

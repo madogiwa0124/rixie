@@ -121,13 +121,12 @@ Rixie::Error                      # base
 
 ```ruby
 Rixie.configure do |config|
-  config.default_provider    = "openai"           # RIXIE_DEFAULT_PROVIDER
+  config.default_provider    = "openai"
   config.default_model       = "gpt-4.1-mini"
-  config.default_max_tokens  = nil
   config.default_temperature = nil
   config.store               = Rixie::Store::Memory
   config.logger              = Logger.new($stdout)
-  config.log_level           = :info                       # RIXIE_LOG_LEVEL
+  config.log_level           = :info
   config.log_format          = :text                       # :text (default Subscribers::Logger) | :json (Subscribers::JsonLogger). Both receive config.logger automatically.
   config.default_subscribers = nil                         # nil → [default subscriber chosen by log_format]; [] → no subscribers; pass an array to override entirely
 
@@ -139,7 +138,7 @@ Rixie.configure do |config|
 end
 ```
 
-Built-in provider: `openai`. OpenAI-compatible endpoints (GitHub Models, Ollama, etc.) can be registered via `config.register_provider`.
+Built-in providers: `openai`, `ollama`. Other OpenAI-compatible endpoints (GitHub Models, etc.) can be registered via `config.register_provider`.
 
 ## Directory Structure
 
@@ -157,8 +156,10 @@ lib/rixie/
   tool/                     # Built-in tools (HumanInput, Fetch, WebSearch, WikipediaSearch,
                             #                  CurrentTime, Calculator, FileRead/List/Search + FileSandbox)
   mcp/                      # MCP HTTP client
-test/support/dummy_adapter.rb  # Inject fake LLM responses in tests
+test/support/fake_gems/     # Minimal `openai` stub to satisfy require without the real gem
 ```
+
+Fake LLM responses are injected via `Rixie::LLM::Adapter::Dummy` (`lib/rixie/llm/adapter/dummy.rb`).
 
 ## Design Rules
 
