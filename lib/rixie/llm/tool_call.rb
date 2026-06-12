@@ -14,11 +14,13 @@ module Rixie
       end
 
       def self.from_openai_wire(raw)
-        new(
-          id: raw["id"],
-          name: raw["function"]["name"],
-          arguments: JSON.parse(raw["function"]["arguments"])
-        )
+        name = raw["function"]["name"]
+        arguments = begin
+          JSON.parse(raw["function"]["arguments"])
+        rescue JSON::ParserError => e
+          raise Rixie::LLM::Error, "Invalid JSON in arguments for tool call #{name.inspect}: #{e.message}"
+        end
+        new(id: raw["id"], name: name, arguments: arguments)
       end
 
       def to_openai_wire

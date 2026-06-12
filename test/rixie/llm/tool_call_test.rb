@@ -26,6 +26,15 @@ class LLMToolCallTest < Minitest::Test
     assert_equal({"location" => "Tokyo", "unit" => "celsius"}, tool_call.arguments)
   end
 
+  def test_from_openai_wire_raises_llm_error_for_invalid_arguments_json
+    raw = {
+      "id" => "call_abc123",
+      "function" => {"name" => "get_weather", "arguments" => '{"location":'}
+    }
+    error = assert_raises(Rixie::LLM::Error) { Rixie::LLM::ToolCall.from_openai_wire(raw) }
+    assert_includes error.message, "get_weather"
+  end
+
   def test_to_openai_wire_returns_openai_wire_format
     tool_call = Rixie::LLM::ToolCall.from_openai_wire(RAW)
     result = tool_call.to_openai_wire
