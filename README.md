@@ -64,6 +64,6 @@ Session          # manages the full conversation; accumulates history across cha
 - **[Strategies](docs/strategies.md)** — `Simple` for single-loop tasks, `PlanExecute` for plan-then-execute multi-step tasks, `ReAct` for explicit Thought → Action → Observation reasoning traces.
 - **[MCP](docs/mcp.md)** — Connect to any MCP (Model Context Protocol) server over HTTP and import its tools automatically.
 - **[Multi-Agent Orchestration](docs/multi-agent.md)** — Compose agents by wrapping a `Session` as a tool, with isolated context per sub-agent.
-- **[Subscribers](docs/subscribers.md)** — Observe agent behavior via the event bus — built-in logging plus pluggable subscribers (e.g. OpenTelemetry).
+- **[Subscribers](docs/subscribers.md)** — Observe agent behavior via the event bus — built-in logging, Langfuse and OpenTelemetry tracing, plus pluggable custom subscribers.
 - **[Streaming](docs/streaming.md)** — Stream tokens, tool calls, and lifecycle events via `Session#live`.
 - **[Context Compression](docs/context-compression.md)** — Summarize accumulated history to control token usage in long sessions.

@@ -9,8 +9,9 @@ Rixie uses a subscriber pattern for observability. By default, a `Subscribers::L
 | `Subscribers::Logger` | Human-readable text — `[Task] started: "..."` style. Default. |
 | `Subscribers::JsonLogger` | One JSON object per line. Suitable for shipping to log aggregators. |
 | `Subscribers::Langfuse` | Sends traces to a [Langfuse](https://langfuse.com) instance via the ingestion API. |
+| `Subscribers::OpenTelemetry` | Exports spans to any [OpenTelemetry](https://opentelemetry.io/)-compatible backend via OTLP HTTP. |
 
-Both wrap a `::Logger` instance and emit each event at a severity determined by `Subscribers::EventSeverity` — see [Log severity](#log-severity) below.
+The two logger subscribers wrap a `::Logger` instance and emit each event at a severity determined by `Subscribers::EventSeverity` — see [Log severity](#log-severity) below.
 
 To switch the default subscriber to JSON output, set `log_format`:
 
@@ -27,7 +28,7 @@ If you need to fully control which subscribers are attached (e.g. to add an Open
 Rixie.configure do |config|
   config.default_subscribers = [
     Rixie::Subscribers::JsonLogger.new(logger: Logger.new($stdout)),
-    OpenTelemetrySubscriber.new
+    Rixie::Subscribers::OpenTelemetry.new(service_name: "my-app")
   ]
 end
 ```
@@ -107,11 +108,62 @@ Rixie.configure do |config|
 end
 ```
 
-The subscriber is also available in the [CLI](cli.md) via the `--langfuse` flag or environment variables — see [CLI — Langfuse tracing](cli.md#langfuse-tracing).
+The subscriber is also available in the [CLI](cli.md) via the `--langfuse` flag — see [CLI — Langfuse tracing](cli.md#langfuse-tracing).
 
 ### Flush behavior
 
 All ingestion events for a Task are buffered in memory and sent to `POST /api/public/ingestion` in a single HTTP request when `TaskEnd` fires. If the request fails (network error or non-2xx response), the error is logged at `warn` level and the agent continues normally — tracing failures are never fatal.
+
+## OpenTelemetry
+
+`Subscribers::OpenTelemetry` exports Rixie events as OpenTelemetry spans via the OTLP HTTP exporter. Works with any OTLP-compatible backend (OpenObserve, Jaeger, Grafana Tempo, vendor APMs, ...).
+
+```
+Task  → span "task"           (root)
+  Run   → span "run"
+    LLM call   → span "gen_ai.chat"   (kind: client; model, provider, token usage)
+    Tool call  → span "tool.<name>"   (error status when the tool fails)
+```
+
+LLM spans carry [GenAI semantic convention](https://opentelemetry.io/docs/specs/semconv/gen-ai/) attributes (`gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, ...). Failed runs/tasks and tool errors are marked with OTel error status.
+
+### Dependencies
+
+The OpenTelemetry gems are optional dependencies. The subscriber raises `Rixie::ConfigurationError` with instructions if they are missing:
+
+```ruby
+# Gemfile
+gem "opentelemetry-sdk"
+gem "opentelemetry-exporter-otlp"
+```
+
+### Setup
+
+The `docker-compose.yml` at the repo root includes an [OpenObserve](https://openobserve.ai) service as a local backend (UI at `http://localhost:5080`, login `root@example.com` / `Complexpass#123`):
+
+```bash
+docker compose up -d
+```
+
+### Usage
+
+```ruby
+Rixie.configure do |config|
+  config.default_subscribers = [
+    Rixie::Subscribers::OpenTelemetry.new(
+      service_name: "my-app",
+      endpoint: "http://localhost:5080/api/default/v1/traces",
+      headers: {"Authorization" => "Basic #{Base64.strict_encode64("root@example.com:Complexpass#123")}"}
+    )
+  ]
+end
+```
+
+- `endpoint:` must be the **full** traces URL — it is passed to the OTLP exporter as-is (no `/v1/traces` appended). Omit it to let the exporter resolve standard `OTEL_EXPORTER_OTLP_*` env vars instead.
+- `headers:` takes a plain Hash, so values need no URL encoding (unlike the `OTEL_EXPORTER_OTLP_HEADERS` env var).
+- `tracer_provider:` injects a pre-configured `TracerProvider` — useful when your app already sets up OpenTelemetry globally, or in tests. When given, `endpoint:` / `headers:` are ignored.
+
+The subscriber is also available in the [CLI](cli.md) via the `--otel` flag — see [CLI — OpenTelemetry tracing](cli.md#opentelemetry-tracing).
 
 ## Disabling the default logger
 
@@ -123,7 +175,7 @@ end
 
 ## Adding custom subscribers
 
-Implement `Rixie::Subscriber` and pass instances to `Session`. Here's an example that creates [OpenTelemetry](https://opentelemetry.io/) spans following the [GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/):
+Implement `Rixie::Subscriber` and pass instances to `Session`. Here's an example that creates [OpenTelemetry](https://opentelemetry.io/) spans following the [GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/). (Rixie ships a built-in [`Subscribers::OpenTelemetry`](#opentelemetry) — this walkthrough shows how you would build such an integration yourself, and demonstrates the `Envelope` API along the way.)
 
 ```ruby
 require "opentelemetry/sdk"

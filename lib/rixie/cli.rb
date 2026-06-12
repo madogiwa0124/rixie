@@ -102,6 +102,18 @@ module Rixie
           @options[:langfuse_url] = v || ENV.fetch("LANGFUSE_BASE_URL", "http://localhost:3000")
         end
 
+        opts.on("--otel [ENDPOINT]", "Enable OpenTelemetry tracing (default: http://localhost:5080/api/default/v1/traces)") do |v|
+          @options[:otel_endpoint] = v || ENV.fetch("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "http://localhost:5080/api/default/v1/traces")
+        end
+
+        opts.on("--otel-user USER", "Basic auth username for OTel backend (e.g. OpenObserve)") do |v|
+          @options[:otel_user] = v
+        end
+
+        opts.on("--otel-password PASSWORD", "Basic auth password for OTel backend") do |v|
+          @options[:otel_password] = v
+        end
+
         opts.on("--debug", "Enable debug logging") do
           @options[:debug] = true
         end
@@ -143,9 +155,11 @@ module Rixie
       model = @options[:model] || Rixie.config.default_model
 
       @langfuse_subscriber = resolve_langfuse_subscriber
+      @otel_subscriber = resolve_otel_subscriber
       langfuse_url = @langfuse_subscriber ? resolve_langfuse_url : nil
+      otel_endpoint = @otel_subscriber ? resolve_otel_endpoint : nil
 
-      renderer.welcome(version: Rixie::VERSION, provider: provider, model: model, langfuse_url: langfuse_url)
+      renderer.welcome(version: Rixie::VERSION, provider: provider, model: model, langfuse_url: langfuse_url, otel_endpoint: otel_endpoint)
 
       @current_model = @options[:model] || Rixie.config.default_model
       @session = build_session
@@ -217,7 +231,7 @@ module Rixie
     end
 
     def build_session(context: [])
-      subs = @langfuse_subscriber ? [@langfuse_subscriber] : []
+      subs = [@langfuse_subscriber, @otel_subscriber].compact
       Rixie::Session.new(
         instructions: @options[:instructions],
         tools: default_tools + self.class.extra_tools,
@@ -245,6 +259,25 @@ module Rixie
       end
 
       Rixie::Subscribers::Langfuse.new(base_url: url, public_key: pk, secret_key: sk)
+    end
+
+    def resolve_otel_endpoint
+      @options[:otel_endpoint] if @options.key?(:otel_endpoint)
+    end
+
+    def resolve_otel_headers
+      user = @options[:otel_user] || ENV["OPENOBSERVE_USER"]
+      password = @options[:otel_password] || ENV["OPENOBSERVE_PASSWORD"]
+      return {} unless user && password
+      require "base64"
+      {"Authorization" => "Basic #{Base64.strict_encode64("#{user}:#{password}")}"}
+    end
+
+    def resolve_otel_subscriber
+      endpoint = resolve_otel_endpoint
+      return nil unless endpoint
+      headers = resolve_otel_headers
+      Rixie::Subscribers::OpenTelemetry.new(service_name: "rixie", endpoint: endpoint, headers: headers)
     end
 
     def default_tools

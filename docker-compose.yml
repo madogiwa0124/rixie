@@ -1,16 +1,42 @@
-# Langfuse v3 — local observability for Rixie
+# Local observability for Rixie
+#
+# Includes:
+#   - Langfuse v3  (http://localhost:3000) — structured traces via Langfuse API
+#   - OpenObserve  (http://localhost:5080) — OpenTelemetry / OTLP traces
 #
 # Usage:
 #   docker compose up -d
-#   open http://localhost:3000   # create an account, then grab public/secret keys
 #
-# Configure Rixie:
+# Langfuse setup:
+#   open http://localhost:3000   # create an account, then grab public/secret keys
 #   Rixie.configure do |config|
 #     config.default_subscribers = [
 #       Rixie::Subscribers::Langfuse.new(
 #         base_url:   "http://localhost:3000",
 #         public_key: ENV["LANGFUSE_PUBLIC_KEY"],
 #         secret_key: ENV["LANGFUSE_SECRET_KEY"]
+#       )
+#     ]
+#   end
+#
+# OpenObserve setup:
+#   open http://localhost:5080   # default login: root@example.com / Complexpass#123
+#
+#   Option A — CLI flags (recommended, no encoding needed):
+#     bundle exec rixie --otel --otel-user root@example.com --otel-password 'Complexpass#123'
+#
+#   Option B — env vars (OTLP_HEADERS value must be URL-encoded; space → %20):
+#     export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:5080/api/default/v1/traces
+#     export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic%20$(echo -n 'root@example.com:Complexpass#123' | base64)"
+#     bundle exec rixie --otel
+#
+#   Or via Ruby:
+#   Rixie.configure do |config|
+#     config.default_subscribers = [
+#       Rixie::Subscribers::OpenTelemetry.new(
+#         service_name: "my-app",
+#         endpoint:     "http://localhost:5080/api/default",
+#         headers:      {"Authorization" => "Basic #{Base64.strict_encode64('root@example.com:Complexpass#123')}"}
 #       )
 #     ]
 #   end
@@ -156,8 +182,20 @@ services:
       mc mb --ignore-existing local/langfuse-media
       "
 
+  openobserve:
+    image: public.ecr.aws/zinclabs/openobserve:latest
+    restart: unless-stopped
+    ports:
+      - "5080:5080"
+    environment:
+      ZO_ROOT_USER_EMAIL: root@example.com
+      ZO_ROOT_USER_PASSWORD: Complexpass#123
+    volumes:
+      - openobserve_data:/data
+
 volumes:
   postgres_data:
   clickhouse_data:
   redis_data:
   minio_data:
+  openobserve_data:

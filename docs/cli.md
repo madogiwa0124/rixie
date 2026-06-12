@@ -60,6 +60,9 @@ CLI                     # REPL loop, option parsing, session lifecycle
 | `--model MODEL` | Model name |
 | `--instructions TEXT` | Override the default system prompt |
 | `--langfuse [BASE_URL]` | Enable Langfuse tracing (default base URL: `http://localhost:3000`). Requires `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` env vars. |
+| `--otel [ENDPOINT]` | Enable OpenTelemetry tracing. Default endpoint: `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` env var, falling back to `http://localhost:5080/api/default/v1/traces` (local OpenObserve). |
+| `--otel-user USER` | Basic auth username for the OTel backend (falls back to `OPENOBSERVE_USER`) |
+| `--otel-password PASSWORD` | Basic auth password for the OTel backend (falls back to `OPENOBSERVE_PASSWORD`) |
 | `--debug` | Print full LLM logs to stdout |
 | `--version` | Print version and exit |
 | `--help` | Print usage and exit |
@@ -80,24 +83,17 @@ Type `exit` or press `Ctrl+C` to quit.
 
 ## Langfuse tracing
 
-The CLI can send traces to [Langfuse](https://langfuse.com) automatically. Each conversation turn becomes a Trace with Run, Generation, and tool-call Spans nested inside it.
+The CLI can send traces to [Langfuse](https://langfuse.com). Each conversation turn becomes a Trace with Run, Generation, and tool-call Spans nested inside it.
 
-**Auto-detect from environment variables** — if `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are set, tracing is enabled automatically:
+Tracing is enabled only with the explicit `--langfuse` flag. Credentials come from the `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` env vars; the base URL defaults to `LANGFUSE_BASE_URL` (or `http://localhost:3000`) and can be overridden as the flag argument:
 
 ```bash
 export LANGFUSE_PUBLIC_KEY=pk-lf-...
 export LANGFUSE_SECRET_KEY=sk-lf-...
-export LANGFUSE_BASE_URL=http://localhost:3000   # optional, defaults to localhost:3000
 
-bundle exec rixie --provider openai --model gpt-4.1-mini
-```
-
-**Explicit flag** — use `--langfuse` to opt in, optionally overriding the base URL:
-
-```bash
-LANGFUSE_PUBLIC_KEY=pk-lf-... LANGFUSE_SECRET_KEY=sk-lf-... \
-  bundle exec rixie --provider openai --model gpt-4.1-mini \
-  --langfuse https://cloud.langfuse.com
+bundle exec rixie --provider openai --model gpt-4.1-mini --langfuse
+# or point at a hosted instance:
+bundle exec rixie --provider openai --model gpt-4.1-mini --langfuse https://cloud.langfuse.com
 ```
 
 When active, the welcome frame shows `Langfuse: <base_url>`. Traces appear in the Langfuse UI after each response.
@@ -110,6 +106,30 @@ open http://localhost:3000   # create an account and generate API keys
 ```
 
 See [Subscribers — Langfuse](subscribers.md#langfuse) for programmatic usage.
+
+## OpenTelemetry tracing
+
+The CLI can also export traces to any OpenTelemetry-compatible backend via OTLP HTTP. Each conversation turn becomes a `task` span with `run`, `gen_ai.chat`, and `tool.*` spans nested inside it.
+
+Tracing is enabled only with the explicit `--otel` flag. The endpoint resolves in this order: flag argument → `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` env var → `http://localhost:5080/api/default/v1/traces` (local OpenObserve). Note the endpoint must be the **full** traces URL — it is passed to the OTLP exporter as-is, so `/v1/traces` is not appended automatically.
+
+```bash
+# Local OpenObserve (started via docker compose up -d)
+bundle exec rixie --provider openai --model gpt-4.1-mini \
+  --otel --otel-user root@example.com --otel-password 'Complexpass#123'
+
+# Any other OTLP HTTP backend
+bundle exec rixie --provider openai --model gpt-4.1-mini \
+  --otel http://collector:4318/v1/traces
+```
+
+`--otel-user` / `--otel-password` (or the `OPENOBSERVE_USER` / `OPENOBSERVE_PASSWORD` env vars) add a Basic auth header for backends that require it, such as OpenObserve. They are built into a header Hash internally, so special characters in the password need no URL encoding — unlike `OTEL_EXPORTER_OTLP_HEADERS`.
+
+When active, the welcome frame shows `OpenTelemetry: <endpoint>`. The `docker-compose.yml` at the project root includes an OpenObserve service (UI at `http://localhost:5080`, login `root@example.com` / `Complexpass#123`).
+
+The OpenTelemetry gems are optional dependencies — add `opentelemetry-sdk` and `opentelemetry-exporter-otlp` to your Gemfile to use this flag.
+
+See [Subscribers — OpenTelemetry](subscribers.md#opentelemetry) for programmatic usage.
 
 ## Custom commands
 

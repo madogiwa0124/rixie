@@ -17,3 +17,5 @@ gem "bundler-audit", "~> 0.9", require: false
 gem "openai", require: false
 gem "nokogiri", require: false
 gem "cli-ui", require: false
+gem "opentelemetry-sdk", require: false
+gem "opentelemetry-exporter-otlp", require: false
