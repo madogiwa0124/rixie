@@ -172,3 +172,4 @@ Fake LLM responses are injected via `Rixie::LLM::Adapter::Dummy` (`lib/rixie/llm
 @.claude/rules/cli.md
 @.claude/rules/events.md
 @.claude/rules/tool.md
+@.claude/rules/documentation.md
