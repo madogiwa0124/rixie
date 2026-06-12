@@ -157,6 +157,41 @@ class Rixie::Http::ClientTest < Minitest::Test
     assert_raises(Rixie::Http::SSRFError) { client.get("http://[::ffff:127.0.0.1]/foo") }
   end
 
+  def test_get_raises_ssrf_error_for_link_local_addresses
+    client = build_client
+    assert_raises(Rixie::Http::SSRFError) { client.get("http://169.254.169.254/latest/meta-data/") }
+    assert_raises(Rixie::Http::SSRFError) { client.get("http://169.254.0.1/foo") }
+  end
+
+  def test_get_raises_ssrf_error_for_cgnat_addresses
+    client = build_client
+    assert_raises(Rixie::Http::SSRFError) { client.get("http://100.64.0.1/foo") }
+    assert_raises(Rixie::Http::SSRFError) { client.get("http://100.127.255.255/foo") }
+  end
+
+  def test_get_raises_ssrf_error_for_multicast_and_reserved_addresses
+    client = build_client
+    assert_raises(Rixie::Http::SSRFError) { client.get("http://224.0.0.1/foo") }
+    assert_raises(Rixie::Http::SSRFError) { client.get("http://255.255.255.255/foo") }
+  end
+
+  def test_get_raises_ssrf_error_for_ipv6_multicast
+    client = build_client
+    assert_raises(Rixie::Http::SSRFError) { client.get("http://[ff02::1]/foo") }
+  end
+
+  def test_get_raises_ssrf_error_for_localhost_subdomain
+    client = build_client
+    assert_raises(Rixie::Http::SSRFError) { client.get("http://sub.localhost/foo") }
+  end
+
+  def test_get_allows_public_ip_literal
+    res = plain_response("ok")
+    client = build_client(http_client: mock_http_for(res))
+    result = client.get("http://93.184.216.34/foo")
+    assert_equal 200, result[:status]
+  end
+
   def test_get_allows_public_https
     res = plain_response("ok")
     client = build_client(http_client: mock_http_for(res))

@@ -6,6 +6,7 @@ require "zlib"
 require "stringio"
 require "openssl"
 require "socket"
+require "ipaddr"
 
 module Rixie
   module Http
@@ -102,20 +103,26 @@ module Rixie
         http
       end
 
-      # NOTE: This regex is not exhaustive but covers common private IP ranges and localhost.
-      #       The http client also performs DNS resolution and checks resolved IPs against this pattern to mitigate SSRF risks.
-      BLOCKED_HOSTS = /\A(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|localhost|0\.0\.0\.0)/
-      private_constant :BLOCKED_HOSTS
+      # Non-public address ranges blocked unless allow_private: is set.
+      # Covers loopback, RFC1918 private, link-local (incl. cloud metadata at
+      # 169.254.169.254), CGNAT, multicast, and reserved ranges for both IPv4 and IPv6.
+      # Hostnames that are not IP literals pass this check and are instead validated
+      # after DNS resolution in build_http_client (every resolved IP is re-checked).
+      BLOCKED_IP_RANGES = %w[
+        0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16
+        172.16.0.0/12 192.168.0.0/16 224.0.0.0/4 240.0.0.0/4
+        ::/128 ::1/128 fc00::/7 fe80::/10 ff00::/8
+      ].map { |cidr| IPAddr.new(cidr) }.freeze
+      private_constant :BLOCKED_IP_RANGES
       def blocked_host?(host)
-        return true if host.match?(BLOCKED_HOSTS)
-        lower = host.delete_prefix("[").delete_suffix("]").downcase
-        for_ipv6 = ->(host, lower) {
-          ipv6_host = host.include?(":")
-          loopback = lower == "::1"
-          private_host = lower.start_with?("fc", "fd", "fe80:", "::ffff:")
-          ipv6_host && (loopback || private_host)
-        }
-        for_ipv6.call(host, lower)
+        name = host.delete_prefix("[").delete_suffix("]").downcase
+        return true if name == "localhost" || name.end_with?(".localhost")
+
+        ip = IPAddr.new(name)
+        ip = ip.native if ip.ipv6? && ip.ipv4_mapped?
+        BLOCKED_IP_RANGES.any? { |range| range.include?(ip) }
+      rescue IPAddr::InvalidAddressError
+        false
       end
 
       def normalize_headers(headers)
