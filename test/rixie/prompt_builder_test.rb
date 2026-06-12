@@ -56,4 +56,14 @@ class PromptBuilderTest < Minitest::Test
     messages = builder.build(user_input: "hi", instructions: "sys", context: [])
     assert_equal 2, messages.size
   end
+
+  def test_nil_instructions_produce_no_system_message
+    messages = builder.build(user_input: "hi", instructions: nil, context: [])
+    assert_equal [Rixie::Message::User], messages.map(&:class)
+  end
+
+  def test_empty_instructions_produce_no_system_message
+    messages = builder.build(user_input: "hi", instructions: "", context: [])
+    assert_equal [Rixie::Message::User], messages.map(&:class)
+  end
 end

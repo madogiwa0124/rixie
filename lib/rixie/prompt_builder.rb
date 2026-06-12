@@ -4,7 +4,7 @@ module Rixie
   class PromptBuilder
     def build(user_input:, instructions:, context:)
       messages = []
-      messages << Message::System.new(content: instructions)
+      messages << Message::System.new(content: instructions) unless instructions.nil? || instructions.empty?
       messages.concat(context.flat_map(&:to_message))
       messages << Message::User.new(content: user_input)
       messages
