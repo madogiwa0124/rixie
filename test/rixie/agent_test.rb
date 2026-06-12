@@ -111,6 +111,18 @@ class AgentTest < Minitest::Test
     assert_equal "All done", received.event.content
   end
 
+  def test_max_steps_reader_returns_configured_value
+    agent = make_agent([], max_steps: 3)
+    assert_equal 3, agent.max_steps
+  end
+
+  def test_max_steps_reader_returns_default_when_not_configured
+    adapter = Rixie::LLM::Adapter::Dummy.new([])
+    client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
+    agent = Rixie::Agent.new(instructions: "...", llm_client: client)
+    assert_equal Rixie::Agent::DEFAULT_MAX_STEPS, agent.max_steps
+  end
+
   def test_think_raises_max_steps_exceeded_on_next_tool_call_after_budget
     tool = simple_tool
     # max_steps=2 allows 2 tool executions; the 3rd attempt raises before executing

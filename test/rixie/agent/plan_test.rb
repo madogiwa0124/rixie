@@ -73,6 +73,21 @@ class PlanTest < Minitest::Test
     assert_equal "plan_done", received.first.event.tool_calls.first.name
   end
 
+  def test_internal_agent_inherits_base_agent_settings
+    counter = ->(messages) { messages.size }
+    adapter = Rixie::LLM::Adapter::Dummy.new([])
+    client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
+    agent = Rixie::Agent.new(
+      instructions: "...", llm_client: client,
+      max_steps: 3, parallel_tool_calls: true, token_counter: counter
+    )
+    internal = Rixie::Agent::Plan.new(base_agent: agent).send(:internal_agent)
+
+    assert_equal 3, internal.max_steps
+    assert internal.parallel_tool_calls
+    assert_same counter, internal.token_counter
+  end
+
   def test_plan_done_tool_name_is_plan_done
     assert_equal "plan_done", Rixie::Agent::Plan::PLAN_DONE_TOOL.name
   end

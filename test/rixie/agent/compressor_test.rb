@@ -37,6 +37,17 @@ class CompressorTest < Minitest::Test
     assert_equal [], compressor.tools
   end
 
+  def test_internal_agent_inherits_max_steps_and_token_counter_from_base_agent
+    counter = ->(messages) { messages.size }
+    adapter = Rixie::LLM::Adapter::Dummy.new([])
+    client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
+    agent = Rixie::Agent.new(instructions: "...", llm_client: client, max_steps: 3, token_counter: counter)
+    internal = Rixie::Agent::Compressor.new(base_agent: agent).send(:internal_agent)
+
+    assert_equal 3, internal.max_steps
+    assert_same counter, internal.token_counter
+  end
+
   def test_think_delegates_to_base_agent
     base_agent = make_base_agent([finish_response(content: "Summary text")])
     compressor = Rixie::Agent::Compressor.new(base_agent: base_agent)

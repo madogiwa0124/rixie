@@ -87,6 +87,29 @@ class ReActAgentTest < Minitest::Test
     assert result.thoughts[1].finish?
   end
 
+  def test_internal_agent_inherits_max_steps_and_token_counter_from_base_agent
+    counter = ->(messages) { messages.size }
+    adapter = Rixie::LLM::Adapter::Dummy.new([])
+    client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
+    agent = Rixie::Agent.new(instructions: "...", llm_client: client, max_steps: 3, token_counter: counter)
+    internal = Rixie::Agent::ReAct.new(base_agent: agent).send(:internal_agent)
+
+    assert_equal 3, internal.max_steps
+    assert_same counter, internal.token_counter
+  end
+
+  def test_think_respects_base_agent_max_steps
+    base_tool = Rixie::Tool.new(name: "search", description: "s", input_schema: {}, call: ->(_) { "result" })
+    adapter = Rixie::LLM::Adapter::Dummy.new([tool_call_response, tool_call_response])
+    client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
+    agent = Rixie::Agent.new(instructions: "...", tools: [base_tool], llm_client: client, max_steps: 1)
+    react = Rixie::Agent::ReAct.new(base_agent: agent)
+
+    assert_raises(Rixie::MaxStepsExceededError) do
+      react.think(messages: [], listener: Rixie::EventListener.new)
+    end
+  end
+
   def test_internal_agent_uses_parallel_tool_calls_false
     react = Rixie::Agent::ReAct.new(base_agent: make_agent)
     internal = react.send(:internal_agent)

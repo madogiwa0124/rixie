@@ -11,7 +11,7 @@ module Rixie
 
     DEFAULT_MAX_STEPS = 10
 
-    attr_reader :instructions, :tools, :llm_client, :parallel_tool_calls, :token_counter
+    attr_reader :instructions, :tools, :llm_client, :max_steps, :parallel_tool_calls, :token_counter
 
     def initialize(instructions:, llm_client:, tools: [], max_steps: nil, parallel_tool_calls: false, token_counter: nil)
       @instructions = instructions

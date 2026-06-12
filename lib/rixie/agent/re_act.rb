@@ -45,6 +45,9 @@ module Rixie
           instructions: instructions,
           tools: tools,
           llm_client: @base_agent.llm_client,
+          max_steps: @base_agent.max_steps,
+          token_counter: @base_agent.token_counter,
+          # Intentionally NOT inherited: ReAct requires one tool call per iteration.
           parallel_tool_calls: false
         )
       end

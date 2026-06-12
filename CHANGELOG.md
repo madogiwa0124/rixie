@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `Agent::Plan`, `Agent::ReAct`, and `Agent::Compressor` silently dropped the base
+  agent's `max_steps`, `token_counter`, and (for `Plan`) `parallel_tool_calls`,
+  resetting them to defaults. A user-configured step budget now applies to every
+  phase of a strategy. `ReAct` still forces `parallel_tool_calls: false` by design.
 - `LLM::Client::Resolver` raised `NameError` when resolving a provider registered with a
   custom adapter class while the OpenAI adapter had never been loaded.
 - SSRF protection in `Http::Client` now blocks link-local (`169.254.0.0/16`, including

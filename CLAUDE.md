@@ -58,6 +58,9 @@ Some providers (e.g. GitHub Models) serve models whose names contain another pro
 **Strategy lives on Task, not Agent.**
 Strategy determines how many Runs to execute for a goal. Placing it on Agent would conflate execution strategy with agent identity, and would clash semantically with `Agent::Plan`.
 
+**Wrapper agents inherit the base agent's execution settings.**
+`Agent::Plan`, `Agent::ReAct`, and `Agent::Compressor` build their internal `Agent` with the base agent's `max_steps` and `token_counter`, so a user-configured budget applies to every phase of a strategy instead of silently resetting to defaults. `Plan` also inherits `parallel_tool_calls`. `ReAct` deliberately does **not** — it forces `parallel_tool_calls: false` because the ReAct protocol requires exactly one tool call per iteration. `Compressor` runs with no tools, so `parallel_tool_calls` is irrelevant and not passed.
+
 **`Agent#think` owns the loop; `Agent::Loop` does not exist as a separate class.**
 Tool calling is a basic protocol of any tool-capable agent, not a strategy. The loop is absorbed into `Agent#think` directly.
 

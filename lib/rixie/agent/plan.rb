@@ -54,7 +54,10 @@ module Rixie
         @internal_agent ||= Agent.new(
           instructions: instructions,
           tools: tools,
-          llm_client: @base_agent.llm_client
+          llm_client: @base_agent.llm_client,
+          max_steps: @base_agent.max_steps,
+          parallel_tool_calls: @base_agent.parallel_tool_calls,
+          token_counter: @base_agent.token_counter
         )
       end
     end
