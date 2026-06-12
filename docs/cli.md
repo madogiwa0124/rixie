@@ -34,16 +34,18 @@ CLI                     # REPL loop, option parsing, session lifecycle
 ├── Renderer            # All terminal output goes through here
 │   ├── Spinner         # Background spinner thread, owned by Renderer
 │   └── Markdown        # Renders markdown text via Terminal
+├── SessionPicker       # -r resume picker, lists saved sessions and reads the choice
 └── Commands::*         # One class per slash command, delegates output to Renderer
 ```
 
-| Layer | Responsibility |
-| --- | --- |
-| `CLI` | Owns the `Reline.readline` loop, parses CLI options, holds the live `Session`. The only layer that reads stdin. |
-| `Terminal` | The only class that references `::CLI::UI`. Exposes semantic helpers (`success`, `error`, `accent`, `bold`, `frame`, …). |
-| `Renderer` | The only class that calls `puts`/`print`. Commands and CLI delegate all output to it. Constructed with a `Terminal` via DI. |
-| `Spinner` | Background spinner thread, owned by `Renderer` (one instance reused across `start_spinner` / `stop_spinner` calls). |
-| `Markdown` | Pure function: markdown text → styled text via `Terminal`. Used to render agent output. |
+| Layer                       | Responsibility                                                                                                                                           |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CLI`                       | Owns the `Reline.readline` loop, parses CLI options, holds the live `Session`. Reads stdin (the REPL loop).                                              |
+| `Terminal`                  | The only class that references `::CLI::UI`. Exposes semantic helpers (`success`, `error`, `accent`, `bold`, `frame`, …).                                 |
+| `Renderer`                  | The only class that calls `puts`/`print`. Commands and CLI delegate all output to it. Constructed with a `Terminal` via DI.                              |
+| `Spinner`                   | Background spinner thread, owned by `Renderer` (one instance reused across `start_spinner` / `stop_spinner` calls).                                      |
+| `Markdown`                  | Pure function: markdown text → styled text via `Terminal`. Used to render agent output.                                                                  |
+| `SessionPicker`             | Lists saved sessions from the store and reads the user's choice for `-r`. Runs before the REPL starts; invoked only by `CLI`.                            |
 | `Commands::Base` subclasses | One class per slash command (`/strategy`, `/model`, `/context`, `/compress`, `/help`). Each owns its own argument parsing, tab completion, and behavior. |
 
 **Boundaries that matter when extending the CLI:**
@@ -54,32 +56,45 @@ CLI                     # REPL loop, option parsing, session lifecycle
 
 ## Options
 
-| Option | Description |
-| --- | --- |
-| `--provider PROVIDER` | LLM provider (`openai`, `ollama`, or any registered custom provider) |
-| `--model MODEL` | Model name |
-| `--instructions TEXT` | Override the default system prompt |
-| `--langfuse [BASE_URL]` | Enable Langfuse tracing (default base URL: `http://localhost:3000`). Requires `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` env vars. |
-| `--otel [ENDPOINT]` | Enable OpenTelemetry tracing. Default endpoint: `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` env var, falling back to `http://localhost:5080/api/default/v1/traces` (local OpenObserve). |
-| `--otel-user USER` | Basic auth username for the OTel backend (falls back to `OPENOBSERVE_USER`) |
-| `--otel-password PASSWORD` | Basic auth password for the OTel backend (falls back to `OPENOBSERVE_PASSWORD`) |
-| `--debug` | Print full LLM logs to stdout |
-| `--version` | Print version and exit |
-| `--help` | Print usage and exit |
+| Option                     | Description                                                                                                                                                                      |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--provider PROVIDER`      | LLM provider (`openai`, `ollama`, or any registered custom provider)                                                                                                             |
+| `--model MODEL`            | Model name                                                                                                                                                                       |
+| `--instructions TEXT`      | Override the default system prompt                                                                                                                                               |
+| `-r`, `--resume`           | Show saved session history and resume the selected session                                                                                                                       |
+| `--langfuse [BASE_URL]`    | Enable Langfuse tracing (default base URL: `http://localhost:3000`). Requires `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` env vars.                                          |
+| `--otel [ENDPOINT]`        | Enable OpenTelemetry tracing. Default endpoint: `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` env var, falling back to `http://localhost:5080/api/default/v1/traces` (local OpenObserve). |
+| `--otel-user USER`         | Basic auth username for the OTel backend (falls back to `OPENOBSERVE_USER`)                                                                                                      |
+| `--otel-password PASSWORD` | Basic auth password for the OTel backend (falls back to `OPENOBSERVE_PASSWORD`)                                                                                                  |
+| `--debug`                  | Print full LLM logs to stdout                                                                                                                                                    |
+| `--version`                | Print version and exit                                                                                                                                                           |
+| `--help`                   | Print usage and exit                                                                                                                                                             |
 
 ## Slash commands
 
 Type `/` during a session to run a command. Tab completion is available for all commands and their arguments.
 
-| Command | Description |
-| --- | --- |
-| `/strategy [simple\|plan-execute\|re-act]` | Switch the execution strategy. Omit the argument to see the current value and available choices. |
-| `/model MODEL` | Switch the model mid-session (resets the LLM client but keeps conversation context). |
-| `/context` | Show approximate token count and number of entries in the current context. |
-| `/compress [N]` | Compress conversation context into a summary, optionally keeping the most recent `N` entries verbatim (default `0`). |
-| `/help` | List available commands. |
+| Command                                    | Description                                                                                                          |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `/strategy [simple\|plan-execute\|re-act]` | Switch the execution strategy. Omit the argument to see the current value and available choices.                     |
+| `/model MODEL`                             | Switch the model mid-session (resets the LLM client but keeps conversation context).                                 |
+| `/context`                                 | Show approximate token count and number of entries in the current context.                                           |
+| `/compress [N]`                            | Compress conversation context into a summary, optionally keeping the most recent `N` entries verbatim (default `0`). |
+| `/help`                                    | List available commands.                                                                                             |
 
 Type `exit` or press `Ctrl+C` to quit.
+
+## Resume previous CLI sessions
+
+The CLI persists session context using `Rixie::Store::File` (path: `~/.rixie/sessions.json`) when `config.store` is not set.
+
+Use `-r` (or `--resume`) to list recent saved sessions and continue one with `Session.resume`. Enter a number to resume that session, or press Enter to start a new session instead:
+
+```bash
+bundle exec rixie --provider ollama --model qwen3.5:4b -r
+```
+
+If no saved sessions exist, the CLI starts a new session automatically.
 
 ## Langfuse tracing
 
@@ -153,12 +168,12 @@ Rixie::CLI.start
 
 The `Base` interface:
 
-| Method | Required | Description |
-| --- | --- | --- |
-| `name` | Yes | Command name, used as `/name` in the REPL |
-| `description` | Yes | Shown in `/help` |
-| `call(arg, cli:)` | Yes | Called when the user runs `/name [arg]`. `arg` is the rest of the input after the command name, or `nil`. `cli` is the running `CLI` instance. |
-| `complete(input)` | No | Returns tab-completion candidates as full strings (e.g. `["/name value1", "/name value2"]`). Default: `[]`. |
+| Method            | Required | Description                                                                                                                                    |
+| ----------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`            | Yes      | Command name, used as `/name` in the REPL                                                                                                      |
+| `description`     | Yes      | Shown in `/help`                                                                                                                               |
+| `call(arg, cli:)` | Yes      | Called when the user runs `/name [arg]`. `arg` is the rest of the input after the command name, or `nil`. `cli` is the running `CLI` instance. |
+| `complete(input)` | No       | Returns tab-completion candidates as full strings (e.g. `["/name value1", "/name value2"]`). Default: `[]`.                                    |
 
 Use `renderer` (available via the private accessor) for all output — never call `puts` directly:
 

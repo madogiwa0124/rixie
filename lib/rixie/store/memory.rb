@@ -5,10 +5,12 @@ module Rixie
     class Memory < Base
       def initialize
         @data = {}
+        @updated_at = {}
       end
 
       def save(session_id, context)
         @data[session_id] = context.map(&:to_store)
+        @updated_at[session_id] = Time.now.utc.iso8601
       end
 
       def load(session_id)
@@ -18,12 +20,18 @@ module Rixie
         entries.map { |entry| self.class.deserialize(entry) }
       end
 
-      def self.deserialize(entry)
-        case entry["type"]
-        when "summary" then Context::Summary.from_store(entry)
-        when "history" then Context::History.from_store(entry)
-        else raise Rixie::Error, "Unknown context entry type: #{entry["type"]}"
+      def list_sessions(limit: nil)
+        rows = @data.map do |session_id, entries|
+          Row.new(
+            session_id: session_id,
+            created_at: nil,
+            updated_at: @updated_at[session_id],
+            entry_count: entries.size,
+            preview: preview_from(entries)
+          )
         end
+
+        latest_first(rows, limit: limit)
       end
     end
   end

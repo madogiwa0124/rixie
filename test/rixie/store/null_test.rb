@@ -15,4 +15,8 @@ class NullStoreTest < Minitest::Test
     store.save("s1", ["data"])
     assert_equal [], store.load("s1")
   end
+
+  def test_list_sessions_returns_empty_array
+    assert_equal [], store.list_sessions
+  end
 end

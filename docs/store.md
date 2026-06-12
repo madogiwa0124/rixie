@@ -14,6 +14,12 @@ end
 
 Once configured, `Session.new` uses this store automatically.
 
+Built-in stores:
+
+- `Rixie::Store::Memory` — in-memory only (useful for tests and single-process apps)
+- `Rixie::Store::File` — JSON file persistence (default path: `~/.rixie/sessions.json`)
+- `Rixie::Store::Null` — no-op store
+
 ## Persisting and resuming a session
 
 ```ruby
@@ -73,9 +79,12 @@ Implement `Rixie::Store::Base` and provide at least:
 
 - `save(session_id, context)`
 - `load(session_id)`
+- `list_sessions(limit: nil)`
 
 `context` is an array of `Context::History` / `Context::Summary` objects.
-Persist them as hashes with `entry.to_store`, and restore with `Context::History.from_store` / `Context::Summary.from_store`.
+Persist them as hashes with `entry.to_store`, and restore with `Context::History.from_store` / `Context::Summary.from_store` (or `Rixie::Store::Base.deserialize`, which dispatches on the entry's `"type"` for you).
+
+`list_sessions` returns an array of `Rixie::Store::Row` (`session_id`, `created_at`, `updated_at`, `entry_count`, `preview`), most recently updated first. UIs such as the CLI resume picker rely on this shape.
 
 Example:
 
@@ -99,6 +108,20 @@ class RedisStore < Rixie::Store::Base
 
     entries = JSON.parse(raw)
     entries.map { |entry| deserialize_entry(entry) }
+  end
+
+  def list_sessions(limit: nil)
+    ids = @redis.smembers("#{@namespace}:index")
+    rows = ids.map do |session_id|
+      Rixie::Store::Row.new(
+        session_id: session_id,
+        created_at: nil,
+        updated_at: nil,
+        entry_count: load(session_id).size,
+        preview: "(preview unavailable)"
+      )
+    end
+    limit ? rows.first(limit) : rows
   end
 
   private
@@ -139,3 +162,5 @@ session = Rixie::Session.new(
 ```
 
 `Store::Memory` is in-memory only and is useful for tests and single-process apps. For production, use a persistent backend (database, cache, object storage, etc.).
+
+The interactive CLI uses `Store::File` by default when `config.store` is not set, so sessions can be resumed with `-r`.

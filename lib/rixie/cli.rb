@@ -6,6 +6,7 @@ require "reline"
 require "optparse"
 require_relative "cli/terminal"
 require_relative "cli/renderer"
+require_relative "cli/session_picker"
 require_relative "cli/commands"
 
 module Rixie
@@ -98,6 +99,10 @@ module Rixie
           @options[:instructions] = v
         end
 
+        opts.on("-r", "--resume", "Resume a previous CLI session") do
+          @options[:resume] = true
+        end
+
         opts.on("--langfuse [BASE_URL]", "Enable Langfuse tracing (default: http://localhost:3000)") do |v|
           @options[:langfuse_url] = v || ENV.fetch("LANGFUSE_BASE_URL", "http://localhost:3000")
         end
@@ -162,7 +167,7 @@ module Rixie
       renderer.welcome(version: Rixie::VERSION, provider: provider, model: model, langfuse_url: langfuse_url, otel_endpoint: otel_endpoint)
 
       @current_model = @options[:model] || Rixie.config.default_model
-      @session = build_session
+      @session = @options[:resume] ? build_resumed_session : build_session
       @strategy_name = "simple"
       setup_completion
 
@@ -189,7 +194,7 @@ module Rixie
 
     def switch_model(new_model)
       @current_model = new_model
-      @session = build_session(context: @session.context)
+      @session = build_session(context: @session.context, session_id: @session.session_id)
     end
 
     def current_strategy
@@ -230,17 +235,32 @@ module Rixie
       end
     end
 
-    def build_session(context: [])
-      subs = [@langfuse_subscriber, @otel_subscriber].compact
-      Rixie::Session.new(
+    def build_session(context: [], session_id: nil)
+      Rixie::Session.new(initial_context: context, session_id: session_id, **session_options)
+    end
+
+    def build_resumed_session
+      session_id = SessionPicker.new(store: cli_store, renderer: renderer).pick
+      return build_session if session_id.nil?
+
+      renderer.success("Resumed session #{session_id}")
+      Rixie::Session.resume(session_id: session_id, **session_options)
+    end
+
+    def session_options
+      {
         instructions: @options[:instructions],
         tools: default_tools + self.class.extra_tools,
         model: @current_model,
         provider: @options[:provider],
-        initial_context: context,
+        store: cli_store,
         parallel_tool_calls: true,
-        subscribers: subs
-      )
+        subscribers: [@langfuse_subscriber, @otel_subscriber].compact
+      }
+    end
+
+    def cli_store
+      @cli_store ||= Rixie.config.store || Rixie::Store::File.new
     end
 
     def resolve_langfuse_url

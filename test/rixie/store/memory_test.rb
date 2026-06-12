@@ -94,4 +94,22 @@ class MemoryStoreTest < Minitest::Test
     loaded = store.load("s10")
     assert_equal "Previous conversation summary:\nrecap", loaded.first.to_message.first.content
   end
+
+  def test_list_sessions_returns_rows_with_expected_shape
+    store.save("s11", [make_history(input: "hello", output: "world")])
+
+    sessions = store.list_sessions
+    assert_equal 1, sessions.size
+    assert_equal "s11", sessions.first.session_id
+    assert_equal 1, sessions.first.entry_count
+    assert_equal "hello", sessions.first.preview
+  end
+
+  def test_list_sessions_respects_limit
+    store.save("s12", [make_history(input: "first")])
+    store.save("s13", [make_history(input: "second")])
+
+    sessions = store.list_sessions(limit: 1)
+    assert_equal 1, sessions.size
+  end
 end

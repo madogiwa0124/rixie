@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   across store entries).
 - `Session.resume(session_id:, ...)` helper to restore a persisted
   session in one step (loads context from store and reuses the same session_id).
+- `Rixie::Store::File` — JSON file persistence store (default path: `~/.rixie/sessions.json`)
+  with atomic writes, so sessions survive across processes.
+- `list_sessions(limit:)` on the `Store::Base` interface (implemented by `File`, `Memory`,
+  and `Null`), returning `Rixie::Store::Row` rows (`session_id`, `created_at`, `updated_at`,
+  `entry_count`, `preview`) sorted most recently updated first.
+- `-r` / `--resume` CLI option: lists saved sessions in an interactive picker and resumes
+  the selected one via `Session.resume`. The CLI persists sessions with `Store::File` by
+  default when `config.store` is not set.
 - `Tool::Fetch.with(max_length:)` factory. Fetch output is now truncated at 50,000
   characters by default (with a `... [truncated]` marker) so a single huge page
   cannot blow the prompt budget.

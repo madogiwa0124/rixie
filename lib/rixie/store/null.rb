@@ -11,7 +11,7 @@ module Rixie
         []
       end
 
-      def self.deserialize(entry)
+      def list_sessions(limit: nil)
         []
       end
     end

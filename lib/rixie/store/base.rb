@@ -19,6 +19,13 @@ module Rixie
         raise Rixie::NotImplementedError, "#{self.class}#load is not implemented"
       end
 
+      # Lists resumable sessions for UI use.
+      # @param limit [Integer, nil]
+      # @return [Array<Row>]
+      def list_sessions(limit: nil)
+        raise Rixie::NotImplementedError, "#{self.class}#list_sessions is not implemented"
+      end
+
       # Serializes context for storage.
       # @param context [Array<Context::History, Context::Summary>]
       # @return [Array<Hash>]
@@ -26,11 +33,34 @@ module Rixie
         raise Rixie::NotImplementedError, "#{self.class}#serialize is not implemented"
       end
 
-      # Deserializes a single stored entry.
+      # Deserializes a single stored entry (the `to_store` hash format).
       # @param entry [Hash] with a "type" key ("summary" or "history")
       # @return [Context::History, Context::Summary]
       def self.deserialize(entry)
-        raise Rixie::NotImplementedError, "#{self}.deserialize is not implemented"
+        case entry["type"]
+        when "summary" then Context::Summary.from_store(entry)
+        when "history" then Context::History.from_store(entry)
+        else raise Rixie::Error, "Unknown context entry type: #{entry["type"]}"
+        end
+      end
+
+      private
+
+      # Shared helpers for building #list_sessions rows from stored entry hashes.
+
+      def latest_first(rows, limit:)
+        sorted = rows.sort_by { |row| row.updated_at || "" }.reverse
+        limit ? sorted.first(limit) : sorted
+      end
+
+      def preview_from(entries)
+        history = entries.rfind { |entry| entry["type"] == "history" }
+        return "(no messages)" if history.nil?
+
+        input = history["input"].to_s.strip
+        return "(empty message)" if input.empty?
+
+        (input.length > 80) ? "#{input[0, 80]}..." : input
       end
     end
   end

@@ -56,4 +56,42 @@ class CliRendererTest < Minitest::Test
     result = @renderer.prompt("plan-execute")
     assert_match(/plan-execute/, result)
   end
+
+  # -- saved_sessions --
+
+  def make_row(session_id:, updated_at:, entry_count: 2, preview: "hello world")
+    Rixie::Store::Row.new(
+      session_id: session_id,
+      created_at: updated_at,
+      updated_at: updated_at,
+      entry_count: entry_count,
+      preview: preview
+    )
+  end
+
+  def test_saved_sessions_renders_numbered_rows_with_metadata
+    rows = [
+      make_row(session_id: "s1", updated_at: "2026-01-02T03:04:00Z"),
+      make_row(session_id: "s2", updated_at: "2026-01-03T03:04:00Z", preview: "second")
+    ]
+
+    out, _err = capture_io { @renderer.saved_sessions(rows) }
+
+    assert_match(/Saved sessions:/, out)
+    assert_match(/1\./, out)
+    assert_match(/s1 \(2 entries, updated: \d{4}-\d{2}-\d{2} \d{2}:\d{2}\) — hello world/, out)
+    assert_match(/2\./, out)
+    assert_match(/second/, out)
+    assert_match(/Press Enter to cancel/, out)
+  end
+
+  def test_saved_sessions_shows_unknown_for_missing_updated_at
+    out, _err = capture_io { @renderer.saved_sessions([make_row(session_id: "s1", updated_at: nil)]) }
+    assert_match(/updated: unknown/, out)
+  end
+
+  def test_saved_sessions_omits_timestamp_for_unparsable_updated_at
+    out, _err = capture_io { @renderer.saved_sessions([make_row(session_id: "s1", updated_at: "not-a-time")]) }
+    assert_match(/s1 \(2 entries\) — hello world/, out)
+  end
 end

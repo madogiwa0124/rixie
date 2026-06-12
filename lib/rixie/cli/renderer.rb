@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "time"
 require_relative "terminal"
 require_relative "spinner"
 require_relative "markdown"
@@ -49,6 +50,14 @@ module Rixie
           info("OpenTelemetry", otel_endpoint) if otel_endpoint
           text("Type #{@terminal.warn("exit")} or press #{@terminal.warn("Ctrl+C")} to quit.")
         end
+      end
+
+      def saved_sessions(sessions)
+        heading("Saved sessions:")
+        sessions.each_with_index do |session, i|
+          puts_indented("#{@terminal.accent("#{i + 1}.")} #{format_saved_session(session)}", level: 2)
+        end
+        text("Press Enter to cancel and start a new session.")
       end
 
       def goodbye
@@ -151,6 +160,14 @@ module Rixie
       def indented(text, level: 1) = "#{"  " * level}#{text}"
 
       def puts_indented(text, level: 1) = puts indented(text, level: level)
+
+      def format_saved_session(session)
+        updated = session.updated_at
+        formatted = updated ? Time.parse(updated).localtime.strftime("%Y-%m-%d %H:%M") : "unknown"
+        "#{session.session_id} (#{session.entry_count} entries, updated: #{formatted}) — #{session.preview}"
+      rescue ArgumentError
+        "#{session.session_id} (#{session.entry_count} entries) — #{session.preview}"
+      end
 
       def format_tool_args(arguments)
         return [] if arguments.nil? || arguments.empty?

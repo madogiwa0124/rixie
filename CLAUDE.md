@@ -46,7 +46,7 @@ Navigation map only. Read the source for signatures; consult **Key Design Decisi
 | `Tool` / `ToolExecutor` | Single concrete `Tool` class. Executor unifies built-in and MCP tools. |
 | `EventListener` / `Event::*` | Per-Task instance-based pub/sub (not a global bus). |
 | `Http::Client` | SSRF-protected HTTP. `allow_private:` opts out (used by MCP). `http_client:` for test injection. |
-| `Store::{Base,Memory,Null}` | Session persistence adapters. Memory is default. |
+| `Store::{Base,File,Memory,Null}` | Session persistence adapters. Memory is the `Session` default; the CLI defaults to `File` (`~/.rixie/sessions.json`) so `-r` can resume. `list_sessions` returns `Store::Row` rows. |
 
 Built-in tools and search providers are catalogued in [`.claude/rules/tool.md`](.claude/rules/tool.md).
 
@@ -127,7 +127,7 @@ Rixie.configure do |config|
   config.default_provider    = "openai"
   config.default_model       = "gpt-4.1-mini"
   config.default_temperature = nil
-  config.store               = Rixie::Store::Memory
+  config.store               = Rixie::Store::Memory.new
   config.logger              = Logger.new($stdout)
   config.log_level           = :info
   config.log_format          = :text                       # :text (default Subscribers::Logger) | :json (Subscribers::JsonLogger). Both receive config.logger automatically.
@@ -153,7 +153,7 @@ lib/rixie/
   context/                  # History, Plan — implement to_message
   strategy/                 # Simple, PlanExecute, ReAct
   llm/                      # Client, Resolver, Adapter (OpenAI, Dummy)
-  store/                    # Base, Memory, Null
+  store/                    # Row, Base, File, Memory, Null
   http/                     # Shared HTTP client with SSRF protection
   search/                   # Search providers (Base, DuckDuckGo, Wikipedia)
   tool/                     # Built-in tools (HumanInput, Fetch, WebSearch, WikipediaSearch,

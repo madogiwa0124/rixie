@@ -8,12 +8,13 @@ CLI                          # REPL loop, option parsing, session lifecycle
 ├── Renderer                 # All terminal output; receives Terminal via DI
 │   ├── Spinner              # Spinner thread; owned by Renderer
 │   └── Markdown             # Pure function: markdown text → styled text via Terminal
+├── SessionPicker            # -r resume picker; lists saved sessions and reads the choice
 └── Commands::*              # One class per slash command; delegates output to Renderer
 ```
 
 ## Responsibility Boundaries
 
-- **Input is CLI's responsibility.** `CLI` owns the `Reline.readline` loop. No other class reads from stdin or prompts the user.
+- **Input is CLI's responsibility.** `CLI` owns the `Reline.readline` loop. No other class reads from stdin or prompts the user, with one exception: `SessionPicker` prompts during the `-r` startup flow, before the REPL begins. It is constructed and invoked only by `CLI`; Commands and Renderer must never read input.
 - **Output is Renderer's responsibility.** All `puts` / `print` calls go through `Renderer`. Commands, CLI, and Spinner never output directly.
 - **Commands own behavior only.** A command reads its argument from `arg` and delegates display to `@renderer`. If an argument is missing, it shows current state and available options so the user can retry.
 
@@ -109,11 +110,19 @@ Rules:
 
 `Renderer` exposes `start_spinner` and `stop_spinner` (no arguments). `CLI` never holds a spinner reference.
 
+## SessionPicker
+
+`SessionPicker` implements the `-r` / `--resume` startup flow: it lists saved sessions from the store and reads the user's numeric choice.
+
+- Constructed with `store:` and `renderer:`; `pick(limit: 20)` returns the chosen `session_id` or `nil` (cancel / no saved sessions).
+- It is the **only** class besides `CLI` allowed to call `Reline.readline`, and only before the REPL starts. It is constructed and invoked only by `CLI`.
+- All output goes through `renderer` (`saved_sessions`, `error`, `text`) — display formatting, including timestamp rendering, lives in `Renderer#saved_sessions`, not in the picker.
+
 ## Testing
 
 The CLI layer is not unit-tested. Testing approach:
 
-- **Unit tests** (`test/rixie/cli/`): `Renderer`, `Spinner`, and individual `Commands::*` classes — behavior, output format, tab completion
+- **Unit tests** (`test/rixie/cli/`): `Renderer`, `Spinner`, `SessionPicker`, and individual `Commands::*` classes — behavior, output format, tab completion
 - **Integration test** (`test/integration/cli_test.rb`): smoke test that `CLI#run` completes without error (stubs `Reline.readline` and `build_session`)
 - **Manual**: `bundle exec rixie` for interactive verification
 
