@@ -286,6 +286,13 @@ class SessionTest < Minitest::Test
     assert_instance_of Enumerator, result
   end
 
+  def test_live_raises_configuration_error_when_no_stream_client
+    agent = Rixie::Agent.new(instructions: "Be helpful.", llm_client: make_client([finish_response]))
+    session = Rixie::Session.new(agent: agent)
+    error = assert_raises(Rixie::ConfigurationError) { session.live("hi") }
+    assert_includes error.message, "stream_client"
+  end
+
   def test_live_yields_event_token_events
     session = make_session_with_live([], [finish_response(content: "Hello")])
     events = session.live("hi").to_a

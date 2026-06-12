@@ -63,6 +63,10 @@ module Rixie
     end
 
     def live(user_input, strategy: Strategy::Simple.new)
+      if @stream_client.nil?
+        raise ConfigurationError, "Session#live requires a stream client. Pass `stream_client:` when constructing Session with a pre-built `agent:`."
+      end
+
       Enumerator.new do |yielder|
         stream_agent = @agent.with_llm_client(@stream_client)
         stream_sub = build_stream_subscriber(yielder)
