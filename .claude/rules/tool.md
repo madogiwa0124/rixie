@@ -47,7 +47,7 @@ end
 
 This is the only acceptable pattern for built-in tools that take configuration. Do not subclass `Tool` to add configuration knobs.
 
-**Tools that follow this pattern:** `WebSearch` (`provider:`, `max_results:`), `WikipediaSearch` (`language:`, `max_results:`), `FileRead` / `FileList` / `FileSearch` (`root_dir:`).
+**Tools that follow this pattern:** `Fetch` (`max_length:`), `WebSearch` (`provider:`, `max_results:`), `WikipediaSearch` (`language:`, `max_results:`), `FileRead` / `FileList` / `FileSearch` (`root_dir:`).
 
 ## Error Returning Convention
 
@@ -122,7 +122,7 @@ Do not inline these checks in individual tools. A divergence between two file to
 
 **Rixie::Tool::HumanInput** — Asks the user for input mid-loop. `return_direct: true` — the agent surfaces the question as its final response and waits for the next `session.chat` call.
 
-**Rixie::Tool::Fetch** — Fetches a URL via `Http::Client`, sanitizes HTML (removes nav, scripts, styles, headers, footers, etc., collapses whitespace), and returns readable text. Non-HTML responses returned as-is.
+**Rixie::Tool::Fetch** — Fetches a URL via `Http::Client`, sanitizes HTML (removes nav, scripts, styles, headers, footers, etc., collapses whitespace), and returns readable text. Non-HTML responses returned as-is. Output is truncated at `max_length:` characters (default 50,000) with a `... [truncated]` marker; `.with(max_length:)` for variants.
 
 **Rixie::Tool::WebSearch** — Pre-configured `Tool` instance (default provider: `Search::DuckDuckGo`, `max_results: 5`). `.with(provider:, max_results:)` for variants.
 
@@ -141,7 +141,7 @@ Do not inline these checks in individual tools. A divergence between two file to
 **`Tool::WebSearch` is a pre-configured `Tool` constant with a `.with` factory method.**
 `WebSearch` is a `Tool` instance with default settings (`DuckDuckGo`, `max_results: 5`), usable as `tools: [Tool::WebSearch]`. Customization goes through `WebSearch.with(provider:, max_results:)`, which returns a new `Tool` instance. The singleton method is defined via `define_singleton_method(:with, &_build)`, reusing the same lambda that built the default. This avoids subclassing for what is just a factory while keeping the callsite symmetric with `Tool::Fetch`.
 
-The same `.with` factory pattern is used by `Tool::WikipediaSearch` (`language:`, `max_results:`) and the three file tools (`root_dir:`). For the file tools specifically, `root_dir` is resolved to `Dir.pwd` at **call time** rather than factory time — if captured at gem load, it would freeze to the load-time directory and silently misbehave when the process later `cd`s.
+The same `.with` factory pattern is used by `Tool::Fetch` (`max_length:`), `Tool::WikipediaSearch` (`language:`, `max_results:`), and the three file tools (`root_dir:`). For the file tools specifically, `root_dir` is resolved to `Dir.pwd` at **call time** rather than factory time — if captured at gem load, it would freeze to the load-time directory and silently misbehave when the process later `cd`s.
 
 **Path safety for file tools is centralized in `Tool::FileSandbox`.**
 The three file tools share the same path-resolution rule (resolve against root, reject escapes), so the logic lives in `FileSandbox.resolve` rather than being inlined three times. This is justified abstraction, not over-engineering: a divergence between the three tools' safety checks would be a security bug. Symlink resolution is intentionally **not** performed — `expand_path` is used rather than `realpath`. Documented limitation: a symlink within `root_dir` pointing outside it will be followed when reading. Don't point `root_dir` at a directory containing untrusted symlinks.

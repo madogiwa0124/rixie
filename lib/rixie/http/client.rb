@@ -12,6 +12,9 @@ module Rixie
   module Http
     class Client
       DEFAULT_TIMEOUT = 30
+      # Caps the decoded response body. Guards against huge responses and
+      # compression bombs (a few KB of gzip inflating to GBs).
+      DEFAULT_MAX_BODY_SIZE = 10 * 1024 * 1024
       DEFAULT_HEADERS = {"User-Agent" => "Rixie/#{Rixie::VERSION}"}.freeze
       CONNECTION_ERRORS = [
         Errno::EHOSTUNREACH, Errno::ECONNRESET, Errno::ECONNREFUSED,
@@ -20,11 +23,12 @@ module Rixie
       ].freeze
       REDIRECT_CODES = [301, 302, 303, 307, 308].freeze
 
-      def initialize(timeout: DEFAULT_TIMEOUT, headers: {}, http_client: nil, allow_private: false)
+      def initialize(timeout: DEFAULT_TIMEOUT, headers: {}, http_client: nil, allow_private: false, max_body_size: DEFAULT_MAX_BODY_SIZE)
         @timeout = timeout
         @default_headers = DEFAULT_HEADERS.merge(headers)
         @http_client = http_client
         @allow_private = allow_private
+        @max_body_size = max_body_size
       end
 
       def get(url)
@@ -130,17 +134,50 @@ module Rixie
       end
 
       def decode_body(response)
-        encoding = response["content-encoding"]
-        return response.body unless encoding
-
-        case encoding.downcase
-        when "gzip"
-          Zlib::GzipReader.new(StringIO.new(response.body)).read
-        when "deflate"
-          Zlib::Inflate.inflate(response.body)
-        else
-          response.body
+        body = response.body.to_s
+        decoded = case response["content-encoding"]&.downcase
+        when "gzip" then gunzip_capped(body)
+        when "deflate" then inflate_capped(body)
+        else body
         end
+        check_body_size!(decoded)
+        decoded
+      end
+
+      DECODE_CHUNK_SIZE = 64 * 1024
+      private_constant :DECODE_CHUNK_SIZE
+
+      # Decompress in chunks and abort as soon as the cap is exceeded, so a
+      # compression bomb never materializes in memory.
+      def gunzip_capped(body)
+        out = +""
+        Zlib::GzipReader.wrap(StringIO.new(body)) do |gz|
+          while (chunk = gz.read(DECODE_CHUNK_SIZE))
+            out << chunk
+            check_body_size!(out)
+          end
+        end
+        out
+      end
+
+      def inflate_capped(body)
+        out = +""
+        inflater = Zlib::Inflate.new
+        begin
+          inflater.inflate(body) do |chunk|
+            out << chunk
+            check_body_size!(out)
+          end
+        ensure
+          inflater.close
+        end
+        out
+      end
+
+      def check_body_size!(body)
+        return if body.bytesize <= @max_body_size
+
+        raise Rixie::Http::Error, "Response body exceeds max_body_size (#{@max_body_size} bytes)"
       end
     end
   end

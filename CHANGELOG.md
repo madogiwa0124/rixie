@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `session_id:` option on `Session` so a resumed session keeps saving under the same
   store key instead of generating a fresh id (and fragmenting one conversation
   across store entries).
+- `Tool::Fetch.with(max_length:)` factory. Fetch output is now truncated at 50,000
+  characters by default (with a `... [truncated]` marker) so a single huge page
+  cannot blow the prompt budget.
+- `max_body_size:` option on `Http::Client` (default 10 MiB). The decoded response
+  body is capped, and gzip/deflate decompression aborts as soon as the cap is
+  exceeded, guarding against oversized responses and compression bombs.
 
 ### Fixed
 

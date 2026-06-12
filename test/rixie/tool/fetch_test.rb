@@ -118,6 +118,37 @@ class Rixie::Tool::FetchTest < Minitest::Test
     end
   end
 
+  def test_call_truncates_html_text_beyond_max_length
+    html = "<html><body><p>#{"a" * 100}</p></body></html>"
+    with_stubbed_http_client(body: html) do
+      output = Rixie::Tool::Fetch.with(max_length: 10).call({"url" => "https://example.com"})
+      assert output.start_with?("a" * 10)
+      assert_includes output, "[truncated: content exceeded 10 characters]"
+      refute_includes output, "a" * 11
+    end
+  end
+
+  def test_call_truncates_non_html_body_beyond_max_length
+    with_stubbed_http_client(body: "b" * 100, content_type: "text/plain") do
+      output = Rixie::Tool::Fetch.with(max_length: 10).call({"url" => "https://example.com"})
+      assert_includes output, "[truncated: content exceeded 10 characters]"
+    end
+  end
+
+  def test_call_does_not_truncate_body_within_max_length
+    with_stubbed_http_client(body: "short", content_type: "text/plain") do
+      output = Rixie::Tool::Fetch.call({"url" => "https://example.com"})
+      assert_equal "short", output
+    end
+  end
+
+  def test_with_returns_a_new_tool_instance
+    custom = Rixie::Tool::Fetch.with(max_length: 10)
+    assert_instance_of Rixie::Tool, custom
+    refute_same Rixie::Tool::Fetch, custom
+    assert_equal "fetch", custom.name
+  end
+
   def test_call_collapses_excess_whitespace
     html = "<html><body><p>Line one</p>\n\n\n\n<p>Line two</p></body></html>"
     with_stubbed_http_client(body: html) do

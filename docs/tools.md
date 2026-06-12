@@ -70,7 +70,13 @@ session = Rixie::Session.new(
 puts session.chat("What does https://example.com say?")
 ```
 
-Requests to private or internal addresses (localhost, 10.x.x.x, 192.168.x.x, etc.) are blocked to prevent SSRF attacks.
+Output is truncated at 50,000 characters by default (with a `... [truncated]` marker) so a single huge page cannot blow the prompt budget. Adjust via the `.with` factory:
+
+```ruby
+tools: [Rixie::Tool::Fetch.with(max_length: 10_000)]
+```
+
+Requests to private or internal addresses (localhost, 10.x.x.x, 192.168.x.x, link-local / cloud metadata, etc.) are blocked to prevent SSRF attacks, and response bodies are capped at 10 MiB (after decompression) to guard against oversized responses and compression bombs.
 
 ### WebSearch
 

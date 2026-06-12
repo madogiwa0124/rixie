@@ -288,6 +288,42 @@ class Rixie::Http::ClientTest < Minitest::Test
     assert_equal raw, result[:body]
   end
 
+  # --- max_body_size ---
+
+  def gzip(raw)
+    io = StringIO.new
+    Zlib::GzipWriter.new(io).tap { |gz|
+      gz.write(raw)
+      gz.close
+    }
+    io.string
+  end
+
+  def test_decode_body_raises_when_gzip_body_exceeds_max_body_size
+    res = build_response(body: gzip("a" * 1000), content_encoding: "gzip")
+    client = Rixie::Http::Client.new(http_client: mock_http_for(res), max_body_size: 500)
+    error = assert_raises(Rixie::Http::Error) { client.get("https://example.com/") }
+    assert_includes error.message, "max_body_size"
+  end
+
+  def test_decode_body_raises_when_deflate_body_exceeds_max_body_size
+    res = build_response(body: Zlib::Deflate.deflate("a" * 1000), content_encoding: "deflate")
+    client = Rixie::Http::Client.new(http_client: mock_http_for(res), max_body_size: 500)
+    assert_raises(Rixie::Http::Error) { client.get("https://example.com/") }
+  end
+
+  def test_decode_body_raises_when_plain_body_exceeds_max_body_size
+    res = plain_response("a" * 1000)
+    client = Rixie::Http::Client.new(http_client: mock_http_for(res), max_body_size: 500)
+    assert_raises(Rixie::Http::Error) { client.get("https://example.com/") }
+  end
+
+  def test_decode_body_allows_body_within_max_body_size
+    res = build_response(body: gzip("a" * 100), content_encoding: "gzip")
+    client = Rixie::Http::Client.new(http_client: mock_http_for(res), max_body_size: 500)
+    assert_equal "a" * 100, client.get("https://example.com/")[:body]
+  end
+
   # --- http_client injection ---
 
   def test_http_client_injection_avoids_real_http
