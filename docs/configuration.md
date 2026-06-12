@@ -162,10 +162,13 @@ context = store.load(session_id)
 session = Rixie::Session.new(
   instructions:    "You are a helpful assistant.",
   store:           store,
-  initial_context: context
+  initial_context: context,
+  session_id:      session_id
 )
 puts session.chat("What's my name?")
 # => "Your name is Alice."
 ```
+
+Pass `session_id:` when resuming so the session keeps saving under the same store key. Without it, each resumed session generates a fresh id and the conversation fragments across keys.
 
 `Store::Memory` keeps history in memory. Implement `Rixie::Store::Base` (`#save`, `#load`) to persist to a database or cache.

@@ -104,6 +104,32 @@ class SessionTest < Minitest::Test
     assert_instance_of Rixie::Context::History, saved.first
   end
 
+  def test_session_id_defaults_to_a_generated_uuid
+    session = make_session([])
+    assert_match(/\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/, session.session_id)
+  end
+
+  def test_session_id_can_be_injected
+    session = make_session([], session_id: "my-session-id")
+    assert_equal "my-session-id", session.session_id
+  end
+
+  def test_resumed_session_with_same_session_id_saves_under_the_same_store_key
+    store = Rixie::Store::Memory.new
+    first = make_session([finish_response(content: "Hi Alice")], store: store)
+    first.chat("Hello, my name is Alice.")
+
+    context = store.load(first.session_id)
+    resumed = make_session(
+      [finish_response(content: "Your name is Alice.")],
+      store: store, initial_context: context, session_id: first.session_id
+    )
+    resumed.chat("What is my name?")
+
+    assert_equal [first.session_id], store.instance_variable_get(:@data).keys
+    assert_equal 2, store.load(first.session_id).size
+  end
+
   def test_store_defaults_to_memory_when_config_store_is_nil
     Rixie.configure { |c| c.store = nil }
     session = make_session([finish_response])

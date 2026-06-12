@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to pass arbitrary parameters directly to the provider API.
   Use this to supply model-specific parameters such as `max_completion_tokens:` for GPT-5
   or `seed:` for reproducibility.
+- `session_id:` option on `Session` so a resumed session keeps saving under the same
+  store key instead of generating a fresh id (and fragmenting one conversation
+  across store entries).
 
 ### Fixed
 

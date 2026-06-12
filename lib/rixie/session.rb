@@ -6,7 +6,7 @@ module Rixie
   class Session
     attr_reader :agent, :tasks, :session_id, :stream_client
 
-    def initialize(agent: nil, stream_client: nil, instructions: nil, tools: [], model: nil, provider: nil, max_steps: nil, llm_client: nil, store: nil, initial_context: [], request_timeout: nil, temperature: nil, token_counter: nil, parallel_tool_calls: false, subscribers: [], provider_params: nil)
+    def initialize(agent: nil, stream_client: nil, instructions: nil, tools: [], model: nil, provider: nil, max_steps: nil, llm_client: nil, store: nil, initial_context: [], request_timeout: nil, temperature: nil, token_counter: nil, parallel_tool_calls: false, subscribers: [], provider_params: nil, session_id: nil)
       resolved_provider = provider || Rixie.config.default_provider
       resolved_model = model || Rixie.config.default_model
       resolved_timeout = request_timeout || Rixie.config.request_timeout
@@ -49,7 +49,8 @@ module Rixie
       @subscribers = default_subs + subscribers
       @store = store || Rixie.config.store || Store::Memory.new
       @initial_context = initial_context
-      @session_id = SecureRandom.uuid
+      # Injectable so a resumed Session keeps saving under the same store key.
+      @session_id = session_id || SecureRandom.uuid
       @tasks = []
       @summary = nil
     end
