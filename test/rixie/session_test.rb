@@ -130,6 +130,56 @@ class SessionTest < Minitest::Test
     assert_equal 2, store.load(first.session_id).size
   end
 
+  def test_resume_loads_context_and_continues_with_same_store_key
+    store = Rixie::Store::Memory.new
+    first = make_session([finish_response(content: "Hi Alice")], store: store)
+    first.chat("Hello, my name is Alice.")
+
+    resumed = Rixie::Session.resume(
+      session_id: first.session_id,
+      instructions: "Be helpful.",
+      store: store,
+      llm_client: make_client([finish_response(content: "Your name is Alice.")])
+    )
+    resumed.chat("What is my name?")
+
+    assert_equal first.session_id, resumed.session_id
+    assert_equal 2, store.load(first.session_id).size
+  end
+
+  def test_resume_uses_config_store_when_store_is_not_given
+    store = Rixie::Store::Memory.new
+    first = make_session([finish_response(content: "Stored")], store: store)
+    first.chat("Hello")
+
+    Rixie.configure { |c| c.store = store }
+    resumed = Rixie::Session.resume(
+      session_id: first.session_id,
+      instructions: "Be helpful.",
+      llm_client: make_client([])
+    )
+
+    assert_equal 1, resumed.context.size
+    assert_instance_of Rixie::Context::History, resumed.context.first
+  ensure
+    Rixie.reset!
+  end
+
+  def test_resume_allows_omitting_instructions
+    store = Rixie::Store::Memory.new
+    first = make_session([finish_response(content: "Stored")], store: store)
+    first.chat("Hello")
+
+    resumed = Rixie::Session.resume(
+      session_id: first.session_id,
+      store: store,
+      llm_client: make_client([])
+    )
+
+    assert_equal 1, resumed.context.size
+    assert_instance_of Rixie::Context::History, resumed.context.first
+  end
+
   def test_store_defaults_to_memory_when_config_store_is_nil
     Rixie.configure { |c| c.store = nil }
     session = make_session([finish_response])

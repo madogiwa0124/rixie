@@ -6,6 +6,24 @@ module Rixie
   class Session
     attr_reader :agent, :tasks, :session_id, :stream_client
 
+    STORE_RESOLVER = ->(store) { store || Rixie.config.store || Store::Memory.new }
+    private_constant :STORE_RESOLVER
+
+    class << self
+      def resume(session_id:, store: nil, **options)
+        resolved_store = STORE_RESOLVER.call(store)
+        resumed_context = resolved_store.load(session_id)
+        options = options.except(:store, :initial_context, :session_id)
+
+        new(
+          store: resolved_store,
+          initial_context: resumed_context,
+          session_id: session_id,
+          **options
+        )
+      end
+    end
+
     def initialize(agent: nil, stream_client: nil, instructions: nil, tools: [], model: nil, provider: nil, max_steps: nil, llm_client: nil, store: nil, initial_context: [], request_timeout: nil, temperature: nil, token_counter: nil, parallel_tool_calls: false, subscribers: [], provider_params: nil, session_id: nil)
       resolved_provider = provider || Rixie.config.default_provider
       resolved_model = model || Rixie.config.default_model
@@ -47,7 +65,7 @@ module Rixie
 
       default_subs = Rixie.config.default_subscribers || [default_log_subscriber]
       @subscribers = default_subs + subscribers
-      @store = store || Rixie.config.store || Store::Memory.new
+      @store = STORE_RESOLVER.call(store)
       @initial_context = initial_context
       # Injectable so a resumed Session keeps saving under the same store key.
       @session_id = session_id || SecureRandom.uuid

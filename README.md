@@ -48,13 +48,13 @@ Session          # manages the full conversation; accumulates history across cha
         └── Agent         # thinks and acts: calls the LLM, executes tools, loops until done
 ```
 
-| Class | Responsibility |
-| --- | --- |
-| `Session` | Entry point. Resolves config, creates `Agent` and `LLM::Client`, exposes `chat` and `live`. |
-| `Task` | Runs a `Strategy` and accumulates `Run` results. Manages an `EventListener`. |
-| `Run` | Calls `agent.think` once. Accumulates tool-call steps. |
-| `Agent` | The think-act loop: calls the LLM, executes tools, emits events. |
-| `Strategy` | Controls how many Runs a Task executes. `Simple` = 1 Run; `PlanExecute` = plan + N Runs. |
+| Class      | Responsibility                                                                              |
+| ---------- | ------------------------------------------------------------------------------------------- |
+| `Session`  | Entry point. Resolves config, creates `Agent` and `LLM::Client`, exposes `chat` and `live`. |
+| `Task`     | Runs a `Strategy` and accumulates `Run` results. Manages an `EventListener`.                |
+| `Run`      | Calls `agent.think` once. Accumulates tool-call steps.                                      |
+| `Agent`    | The think-act loop: calls the LLM, executes tools, emits events.                            |
+| `Strategy` | Controls how many Runs a Task executes. `Simple` = 1 Run; `PlanExecute` = plan + N Runs.    |
 
 ## Features
 
@@ -67,3 +67,4 @@ Session          # manages the full conversation; accumulates history across cha
 - **[Subscribers](docs/subscribers.md)** — Observe agent behavior via the event bus — built-in logging, Langfuse and OpenTelemetry tracing, plus pluggable custom subscribers.
 - **[Streaming](docs/streaming.md)** — Stream tokens, tool calls, and lifecycle events via `Session#live`.
 - **[Context Compression](docs/context-compression.md)** — Summarize accumulated history to control token usage in long sessions.
+- **[Store and Session Persistence](docs/store.md)** — Persist and resume conversations with a default store or per-session store overrides.

@@ -147,28 +147,14 @@ session = Rixie::Session.new(instructions: "...", provider: "ollama",    model: 
 
 ## Persisting sessions across requests
 
-Use a store to save and restore conversation history:
+Use `config.store` as the default persistence backend for all sessions:
 
 ```ruby
-store = Rixie::Store::Memory.new
-
-# First request
-session = Rixie::Session.new(instructions: "You are a helpful assistant.", store: store)
-session.chat("Hello, my name is Alice.")
-session_id = session.session_id
-
-# Later request — restore history and continue
-context = store.load(session_id)
-session = Rixie::Session.new(
-  instructions:    "You are a helpful assistant.",
-  store:           store,
-  initial_context: context,
-  session_id:      session_id
-)
-puts session.chat("What's my name?")
-# => "Your name is Alice."
+Rixie.configure do |config|
+  config.store = Rixie::Store::Memory.new
+end
 ```
 
-Pass `session_id:` when resuming so the session keeps saving under the same store key. Without it, each resumed session generates a fresh id and the conversation fragments across keys.
+Pass `store:` to `Session.new` only when you want to override that default for a specific session.
 
-`Store::Memory` keeps history in memory. Implement `Rixie::Store::Base` (`#save`, `#load`) to persist to a database or cache.
+For full examples (resume flow, `session_id`, and custom store implementation), see [Store and Session Persistence](store.md).
