@@ -51,4 +51,21 @@ class ResolverTest < Minitest::Test
       Resolver.resolve(model: "gpt-4o", provider: nil)
     end
   end
+
+  # Regression: resolving a custom adapter class with parallel_tool_calls set must not
+  # reference Adapter::OpenAI when that constant has never been loaded (lazy require).
+  def test_custom_adapter_class_resolves_when_openai_adapter_is_not_loaded
+    Rixie.configure do |config|
+      config.register_provider("custom_class",
+        adapter: Rixie::LLM::Adapter::Dummy,
+        base_url: "http://localhost",
+        api_key: "test")
+    end
+
+    openai = Rixie::LLM::Adapter.send(:remove_const, :OpenAI) if defined?(Rixie::LLM::Adapter::OpenAI)
+    adapter = Resolver.resolve(model: "m", provider: "custom_class", parallel_tool_calls: true)
+    assert_instance_of Rixie::LLM::Adapter::Dummy, adapter
+  ensure
+    Rixie::LLM::Adapter.const_set(:OpenAI, openai) if openai
+  end
 end

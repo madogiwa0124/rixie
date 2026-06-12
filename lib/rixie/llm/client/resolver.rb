@@ -36,9 +36,16 @@ module Rixie
             temperature: temperature,
             provider_params: provider_params
           }
-          params[:parallel_tool_calls] = parallel_tool_calls unless parallel_tool_calls.nil? || !(adapter_class <= Adapter::OpenAI)
+          params[:parallel_tool_calls] = parallel_tool_calls unless parallel_tool_calls.nil? || !openai_adapter?(adapter_class)
           adapter_class.new(**params)
         end
+
+        # Adapter::OpenAI is loaded lazily; when resolving a custom adapter class
+        # the constant may not be defined, so it must not be referenced unguarded.
+        def self.openai_adapter?(adapter_class)
+          defined?(Adapter::OpenAI) ? adapter_class <= Adapter::OpenAI : false
+        end
+        private_class_method :openai_adapter?
 
         def self.adapter_class_for(adapter)
           case adapter
