@@ -42,12 +42,11 @@ module Rixie
         puts_indented(message)
       end
 
-      def welcome(version:, provider:, model:, langfuse_url: nil, otel_endpoint: nil)
+      def welcome(version:, provider:, model:, tracing_endpoints: [])
         frame("Rixie v#{version}", color: :red) do
           info("Provider", provider)
           info("Model", model)
-          info("Langfuse", langfuse_url) if langfuse_url
-          info("OpenTelemetry", otel_endpoint) if otel_endpoint
+          tracing_endpoints.each { |label, endpoint| info(label, endpoint) }
           text("Type #{@terminal.warn("exit")} or press #{@terminal.warn("Ctrl+C")} to quit.")
         end
       end

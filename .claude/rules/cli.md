@@ -9,6 +9,9 @@ CLI                          # REPL loop, option parsing, session lifecycle
 │   ├── Spinner              # Spinner thread; owned by Renderer
 │   └── Markdown             # Pure function: markdown text → styled text via Terminal
 ├── SessionPicker            # -r resume picker; lists saved sessions and reads the choice
+├── Tracing                  # Facade over tracing backends; one class per backend
+│   ├── Tracing::Langfuse    # --langfuse option, LANGFUSE_* env vars
+│   └── Tracing::Otel        # --otel options, OTLP endpoint + Basic auth
 └── Commands::*              # One class per slash command; delegates output to Renderer
 ```
 
@@ -118,11 +121,20 @@ Rules:
 - It is the **only** class besides `CLI` allowed to call `Reline.readline`, and only before the REPL starts. It is constructed and invoked only by `CLI`.
 - All output goes through `renderer` (`saved_sessions`, `error`, `text`) — display formatting, including timestamp rendering, lives in `Renderer#saved_sessions`, not in the picker.
 
+## Tracing
+
+`Tracing` is a facade over the optional tracing backends. One class per backend (`Tracing::Langfuse`, `Tracing::Otel`), each owning its OptionParser definitions, environment variables, and subscriber construction — backends are split by reason for change. `cli.rb` and `Renderer` carry no backend knowledge.
+
+- `Tracing.add_options(parser, options)` delegates to each backend's `add_options`. Adding a tracing backend means one new class in `cli/tracing/` plus an entry in `Tracing::BACKENDS`.
+- Each backend implements `.add_options(parser, options)`, `#subscriber` (`nil` when inactive), `#label`, and `#endpoint` (display value, `nil` when inactive).
+- The facade is constructed with `(options, renderer:)`. `subscribers` returns the array to pass to `Session`; `active_endpoints` returns `[label, endpoint]` pairs for `Renderer#welcome` — the banner renders whatever it receives, without knowing backend names.
+- Failed resolution (e.g. missing Langfuse credentials) disables the backend and reports via `renderer.error` — construction never raises.
+
 ## Testing
 
 The CLI layer is not unit-tested. Testing approach:
 
-- **Unit tests** (`test/rixie/cli/`): `Renderer`, `Spinner`, `SessionPicker`, and individual `Commands::*` classes — behavior, output format, tab completion
+- **Unit tests** (`test/rixie/cli/`): `Renderer`, `Spinner`, `SessionPicker`, `Tracing`, and individual `Commands::*` classes — behavior, output format, tab completion
 - **Integration test** (`test/integration/cli_test.rb`): smoke test that `CLI#run` completes without error (stubs `Reline.readline` and `build_session`)
 - **Manual**: `bundle exec rixie` for interactive verification
 
