@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Rixie::CLI.register_agent(name, instructions:, tools:, model:)` — register named agent presets
+  that bundle a system prompt and tool set. Users switch between them at runtime with the new `/agent NAME`
+  slash command. Switching rebuilds the `Session` while carrying over the existing conversation context.
+  `model:` is optional and overrides the current model when the preset is activated.
+- `/agent [NAME]` slash command with tab completion for preset names.
 - `provider_params:` option on `Session` and `LLM::Client`, and `config.default_provider_params`,
   to pass arbitrary parameters directly to the provider API.
   Use this to supply model-specific parameters such as `max_completion_tokens:` for GPT-5

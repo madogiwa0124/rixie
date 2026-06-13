@@ -20,11 +20,11 @@ The CLI is built on [Shopify's cli-ui](https://github.com/Shopify/cli-ui) for te
 
 What you get out of the box:
 
-- **Slash commands** — switch strategy/model, inspect or compress context, list help (see [Slash commands](#slash-commands))
+- **Slash commands** — switch strategy/model/agent, inspect or compress context, list help (see [Slash commands](#slash-commands))
 - **Tab completion** — for both command names and command arguments
 - **Markdown rendering** — agent output is rendered with cli-ui styling (headings, code blocks, lists)
 - **Spinner** — while the agent is thinking or executing tools
-- **Extensibility** — register your own slash commands and tools (see [Custom commands](#custom-commands), [Custom tools](#custom-tools))
+- **Extensibility** — register your own slash commands, tools, and agent presets (see [Custom commands](#custom-commands), [Custom tools](#custom-tools), [Agent presets](#agent-presets))
 
 ## Architecture
 
@@ -46,7 +46,7 @@ CLI                     # REPL loop, option parsing, session lifecycle
 | `Spinner`                   | Background spinner thread, owned by `Renderer` (one instance reused across `start_spinner` / `stop_spinner` calls).                                      |
 | `Markdown`                  | Pure function: markdown text → styled text via `Terminal`. Used to render agent output.                                                                  |
 | `SessionPicker`             | Lists saved sessions from the store and reads the user's choice for `-r`. Runs before the REPL starts; invoked only by `CLI`.                            |
-| `Commands::Base` subclasses | One class per slash command (`/strategy`, `/model`, `/context`, `/compress`, `/help`). Each owns its own argument parsing, tab completion, and behavior. |
+| `Commands::Base` subclasses | One class per slash command (`/strategy`, `/model`, `/agent`, `/context`, `/compress`, `/help`). Each owns its own argument parsing, tab completion, and behavior. |
 
 **Boundaries that matter when extending the CLI:**
 
@@ -78,6 +78,7 @@ Type `/` during a session to run a command. Tab completion is available for all 
 | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
 | `/strategy [simple\|plan-execute\|re-act]` | Switch the execution strategy. Omit the argument to see the current value and available choices.                     |
 | `/model MODEL`                             | Switch the model mid-session (resets the LLM client but keeps conversation context).                                 |
+| `/agent [NAME]`                            | Switch to a registered agent preset. Omit the argument to see the current agent and available presets.               |
 | `/context`                                 | Show approximate token count and number of entries in the current context.                                           |
 | `/compress [N]`                            | Compress conversation context into a summary, optionally keeping the most recent `N` entries verbatim (default `0`). |
 | `/help`                                    | List available commands.                                                                                             |
@@ -205,4 +206,40 @@ weather_tool = Rixie::Tool.new(
 
 Rixie::CLI.register_tool(weather_tool)
 Rixie::CLI.start
+
+## Agent presets
+
+Register named agent presets with `Rixie::CLI.register_agent`. Each preset bundles a system prompt and a tool set; the user switches between them at runtime with `/agent NAME`.
+
+```ruby
+require "rixie/cli"
+
+Rixie::CLI
+  .register_agent("coder",
+    instructions: "You are a senior software engineer. Help the user write, review, and debug code.",
+    tools: [Rixie::Tool::FileRead, Rixie::Tool::FileList, Rixie::Tool::FileSearch],
+    model: "gpt-4o"          # optional — overrides the current model on switch
+  )
+  .register_agent("writer",
+    instructions: "You are a technical writer. Help the user draft clear, concise documentation.",
+    tools: []                 # no tools needed for writing tasks
+  )
+
+Rixie::CLI.start
+```
+
+| Option         | Required | Description                                                                                          |
+| -------------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| `instructions` | No       | System prompt for this agent. Defaults to the CLI `--instructions` value (or the built-in default). |
+| `tools`        | No       | Tools available to this agent. Defaults to the full built-in tool set plus any registered tools.     |
+| `model`        | No       | Model to use when this agent is active. Defaults to the current model.                               |
+
+Switching agents rebuilds the `Session` but carries over the existing conversation context — the same behaviour as `/model`.
+
+```
+> /agent           # list presets and show the current agent
+> /agent coder     # activate the "coder" preset
+```
+
+Tab completion works for preset names: type `/agent ` and press Tab.
 ```

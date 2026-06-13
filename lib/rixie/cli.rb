@@ -14,7 +14,7 @@ require_relative "cli/commands"
 module Rixie
   class CLI
     attr_accessor :strategy_name
-    attr_reader :current_model, :commands
+    attr_reader :current_model, :current_agent_name, :commands
 
     def current_context_size = session.context_size
     def current_context_length = session.context.size
@@ -22,6 +22,7 @@ module Rixie
 
     @extra_commands = []
     @extra_tools = []
+    @extra_agents = {}
 
     def self.register_command(command_class)
       @extra_commands |= [command_class]
@@ -47,6 +48,19 @@ module Rixie
 
     def self.reset_registered_tools!
       @extra_tools = []
+    end
+
+    def self.register_agent(name, instructions: nil, tools: nil, model: nil)
+      @extra_agents[name] = {instructions: instructions, tools: tools, model: model}.compact
+      self
+    end
+
+    def self.extra_agents
+      @extra_agents
+    end
+
+    def self.reset_registered_agents!
+      @extra_agents = {}
     end
 
     def self.start(argv = ARGV)
@@ -99,6 +113,7 @@ module Rixie
       @commands = [
         Commands::Strategy.new(renderer: @renderer),
         Commands::Model.new(renderer: @renderer),
+        Commands::Agent.new(renderer: @renderer),
         Commands::Context.new(renderer: @renderer),
         Commands::Compress.new(renderer: @renderer),
         Commands::Help.new(renderer: @renderer),
@@ -123,6 +138,8 @@ module Rixie
       renderer.welcome(version: Rixie::VERSION, provider: provider, model: model, tracing_endpoints: @tracing.active_endpoints)
 
       @current_model = @options[:model] || Rixie.config.default_model
+      @current_agent_name = nil
+      @current_agent_options = nil
       @session = @options[:resume] ? build_resumed_session : build_session
       @strategy_name = "simple"
       setup_completion
@@ -150,6 +167,14 @@ module Rixie
 
     def switch_model(new_model)
       @current_model = new_model
+      @session = build_session(context: @session.context, session_id: @session.session_id)
+    end
+
+    def switch_agent(name)
+      agent_opts = self.class.extra_agents[name]
+      @current_agent_name = name
+      @current_agent_options = agent_opts
+      @current_model = agent_opts[:model] || @current_model
       @session = build_session(context: @session.context, session_id: @session.session_id)
     end
 
@@ -205,14 +230,22 @@ module Rixie
 
     def session_options
       {
-        instructions: @options[:instructions],
-        tools: default_tools + self.class.extra_tools,
+        instructions: current_agent_instructions,
+        tools: current_agent_tools,
         model: @current_model,
         provider: @options[:provider],
         store: cli_store,
         parallel_tool_calls: true,
         subscribers: @tracing.subscribers
       }
+    end
+
+    def current_agent_instructions
+      @current_agent_options&.fetch(:instructions, nil) || @options[:instructions]
+    end
+
+    def current_agent_tools
+      @current_agent_options&.key?(:tools) ? @current_agent_options[:tools] : default_tools + self.class.extra_tools
     end
 
     def cli_store
