@@ -39,6 +39,10 @@ Rixie keeps its runtime footprint small. The following gems are **optional** —
 gem "openai"     # required for the openai / ollama provider adapter (and any OpenAI-compatible endpoint)
 gem "nokogiri"   # required for Rixie::Tool::Fetch and Rixie::Tool::WebSearch (DuckDuckGo HTML parsing)
 gem "cli-ui"     # required to run the `rixie` CLI (bin/rixie)
+
+# OpenTelemetry tracing (Subscribers::OpenTelemetry)
+gem "opentelemetry-sdk"
+gem "opentelemetry-exporter-otlp"
 ```
 
 ## Quick Start
