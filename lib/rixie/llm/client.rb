@@ -21,11 +21,11 @@ module Rixie
         )
       end
 
-      def call(messages, tools:, &block)
+      def call(messages, tools:, schema: nil, &block)
         if @stream
-          @adapter.stream(messages, tools: tools, &block)
+          @adapter.stream(messages, tools: tools, schema: schema, &block)
         else
-          @adapter.chat(messages, tools: tools)
+          @adapter.chat(messages, tools: tools, schema: schema)
         end
       end
     end

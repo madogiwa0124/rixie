@@ -82,6 +82,24 @@ class OpenAIAdapterTest < Minitest::Test
     assert_equal 0.5, get_captured.call[:temperature]
   end
 
+  def test_chat_emits_response_format_when_schema_given
+    adapter = build_adapter
+    get_captured = stub_client(adapter)
+    schema = {"type" => "object", "properties" => {"x" => {"type" => "string"}}, "required" => ["x"]}
+    adapter.chat([], tools: [], schema: schema)
+    rf = get_captured.call[:response_format]
+    assert_equal "json_schema", rf[:type]
+    assert_equal "structured_output", rf[:json_schema][:name]
+    assert_equal schema, rf[:json_schema][:schema]
+  end
+
+  def test_chat_omits_response_format_when_no_schema
+    adapter = build_adapter
+    get_captured = stub_client(adapter)
+    adapter.chat([], tools: [])
+    refute get_captured.call.key?(:response_format)
+  end
+
   def test_chat_merges_provider_params_into_request
     adapter = build_adapter(provider_params: {max_completion_tokens: 500, seed: 42})
     get_captured = stub_client(adapter)

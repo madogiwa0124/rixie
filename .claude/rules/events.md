@@ -73,7 +73,7 @@ def call_thought_tools(thought:, listener:, parallel:)  # ❌
 | `Event::ToolCallEnd` | `{ tool_call:, result: ToolExecutor::Result }` | Once per tool call, after execution (in `tool_calls` order). `result.error?` is true if the tool raised. |
 | `Event::ToolCallsCompleted` | `{ tool_calls:, tool_results: }` | After all tool calls in a single `:tool_call` iteration |
 | `Event::ThoughtCompleted` | `{ thought: }` | Only on `:finish` path, immediately before `Finished` |
-| `Event::Finished` | `{ content: String \| nil }` | Always exactly once when `Agent#think` returns |
+| `Event::Finished` | `{ content: String \| Hash \| nil }` | Always exactly once when `Agent#think` returns. `Hash` when `schema:` (structured output) was supplied; `nil` on the `return_direct` path |
 | `Event::Token` | `{ delta: }` | During streaming, once per token |
 
 ## Firing Order Invariant

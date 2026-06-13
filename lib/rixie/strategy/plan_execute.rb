@@ -27,13 +27,16 @@ module Rixie
       def execute_phase(plan:, task:, listener:)
         completed_histories = []
 
-        plan.steps.each do |step|
+        plan.steps.each_with_index do |step, index|
+          last_step = index == plan.steps.size - 1
           run = Run.new(
             user_input: task.user_input,
             agent: task.agent,
             context: task.context + completed_histories + [
               Context::Plan.new(steps: plan.steps, current_step: step)
-            ]
+            ],
+            # The schema constrains only the final answer — intermediate steps run unconstrained.
+            schema: last_step ? task.schema : nil
           )
           task.runs << run
           run.execute(listener:)

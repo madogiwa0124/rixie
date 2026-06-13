@@ -15,7 +15,7 @@ module Rixie
           @responses = responses.is_a?(Array) ? responses.dup : nil
         end
 
-        def chat(messages, tools:)
+        def chat(messages, tools:, schema: nil)
           if @responses.nil?
             return Rixie::LLM::Response.from_openai_wire(DEFAULT_RESPONSE)
           end
@@ -25,7 +25,7 @@ module Rixie
           Rixie::LLM::Response.from_openai_wire(@responses.shift)
         end
 
-        def stream(messages, tools:, &block)
+        def stream(messages, tools:, schema: nil, &block)
           response = chat(messages, tools: tools)
           if (content = response.content)
             block.call(Rixie::Event::Token.new(delta: content))

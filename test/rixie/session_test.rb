@@ -362,6 +362,18 @@ class SessionTest < Minitest::Test
     assert_instance_of Enumerator, result
   end
 
+  def test_live_raises_argument_error_when_schema_given
+    session = make_session_with_live([], [finish_response(content: "Hello")])
+    error = assert_raises(ArgumentError) { session.live("hi", schema: {"type" => "object"}) }
+    assert_includes error.message, "does not support"
+  end
+
+  def test_chat_with_schema_returns_parsed_hash
+    schema = {"type" => "object", "properties" => {"answer" => {"type" => "string"}}, "required" => ["answer"]}
+    session = make_session([finish_response(content: '{"answer":"yes"}')])
+    assert_equal({"answer" => "yes"}, session.chat("Q", schema: schema))
+  end
+
   def test_live_raises_configuration_error_when_no_stream_client
     agent = Rixie::Agent.new(instructions: "Be helpful.", llm_client: make_client([finish_response]))
     session = Rixie::Session.new(agent: agent)

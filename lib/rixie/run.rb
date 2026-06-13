@@ -6,11 +6,12 @@ module Rixie
   class Run
     attr_reader :id, :user_input, :agent, :context, :thoughts, :steps, :status, :output
 
-    def initialize(user_input:, agent:, context:)
+    def initialize(user_input:, agent:, context:, schema: nil)
       @id = SecureRandom.uuid
       @user_input = user_input
       @agent = agent
       @context = context
+      @schema = schema
       @thoughts = []
       @steps = []
       @status = "running"
@@ -26,7 +27,7 @@ module Rixie
         context: context
       )
 
-      result = agent.think(messages:, listener:)
+      result = agent.think(messages:, listener:, schema: @schema)
       @output = result.content
       @thoughts = result.thoughts
       @status = "completed"

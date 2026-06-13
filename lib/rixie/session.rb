@@ -73,15 +73,19 @@ module Rixie
       @summary = nil
     end
 
-    def chat(user_input, strategy: Strategy::Simple.new)
-      task = Task.new(user_input: user_input, agent: agent, context: context, strategy: strategy, subscribers: @subscribers, session_id: @session_id)
+    def chat(user_input, strategy: Strategy::Simple.new, schema: nil)
+      task = Task.new(user_input: user_input, agent: agent, context: context, strategy: strategy, subscribers: @subscribers, session_id: @session_id, schema: schema)
       task.execute
       @tasks << task
       @store.save(@session_id, context)
       task.output
     end
 
-    def live(user_input, strategy: Strategy::Simple.new)
+    def live(user_input, strategy: Strategy::Simple.new, schema: nil)
+      unless schema.nil?
+        raise ArgumentError, "Session#live does not support `schema:` — structured output requires the complete response and is incompatible with streaming. Use Session#chat with `schema:` instead."
+      end
+
       if @stream_client.nil?
         raise ConfigurationError, "Session#live requires a stream client. Pass `stream_client:` when constructing Session with a pre-built `agent:`."
       end

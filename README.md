@@ -115,6 +115,7 @@ Session          # manages the full conversation; accumulates history across cha
 - **[CLI](docs/cli.md)** — Interactive REPL with slash commands, tab completion, and extensibility via custom commands and tools.
 - **[Tools](docs/tools.md)** — Define your own tools and use the built-ins: web (Fetch, WebSearch, WikipediaSearch), filesystem (FileRead, FileList, FileSearch), utilities (CurrentTime, Calculator), and HumanInput for human-in-the-loop flows.
 - **[Strategies](docs/strategies.md)** — `Simple` for single-loop tasks, `PlanExecute` for plan-then-execute multi-step tasks, `ReAct` for explicit Thought → Action → Observation reasoning traces.
+- **[Structured Output](docs/structured-output.md)** — Pass a JSON Schema to `Session#chat(schema:)` and get back a validated Ruby `Hash` instead of a `String`.
 - **[MCP](docs/mcp.md)** — Connect to any MCP (Model Context Protocol) server over HTTP and import its tools automatically.
 - **[Multi-Agent Orchestration](docs/multi-agent.md)** — Compose agents by wrapping a `Session` as a tool, with isolated context per sub-agent.
 - **[Subscribers](docs/subscribers.md)** — Observe agent behavior via the event bus — built-in logging, Langfuse and OpenTelemetry tracing, plus pluggable custom subscribers.

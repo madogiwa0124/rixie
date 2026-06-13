@@ -20,15 +20,15 @@ module Rixie
           @client = ::OpenAI::Client.new(**params)
         end
 
-        def chat(messages, tools:)
-          result = @client.chat.completions.create(**build_params(encode_messages(messages), tools))
+        def chat(messages, tools:, schema: nil)
+          result = @client.chat.completions.create(**build_params(encode_messages(messages), tools, schema))
           Rixie::LLM::Response.from_openai_wire(normalize(result))
         rescue ::OpenAI::Errors::Error => e
           raise Rixie::LLM::Error, e.message
         end
 
-        def stream(messages, tools:, &block)
-          params = build_params(encode_messages(messages), tools)
+        def stream(messages, tools:, schema: nil, &block)
+          params = build_params(encode_messages(messages), tools, schema)
 
           content = +""
           accumulated_tool_calls = {}
@@ -111,15 +111,26 @@ module Rixie
           end
         end
 
-        def build_params(messages, tools)
+        def build_params(messages, tools, schema = nil)
           params = {model: @model, messages: messages}
           unless tools.empty?
             params[:tools] = encode_tools(tools)
             params[:parallel_tool_calls] = @parallel_tool_calls
           end
+          params[:response_format] = encode_response_format(schema) if schema
           params[:temperature] = @temperature unless @temperature.nil?
           params.merge!(@provider_params)
           params
+        end
+
+        # OpenAI native structured output. `strict: false` keeps arbitrary
+        # caller-supplied JSON Schemas usable without forcing OpenAI's strict-mode
+        # constraints (every property required, additionalProperties: false).
+        def encode_response_format(schema)
+          {
+            type: "json_schema",
+            json_schema: {name: "structured_output", schema: schema, strict: false}
+          }
         end
 
         def normalize(result)

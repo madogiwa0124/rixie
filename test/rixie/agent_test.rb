@@ -195,27 +195,36 @@ class AgentTest < Minitest::Test
     assert_instance_of Rixie::Event::Finished, events.last.event
   end
 
-  def test_think_appends_tool_call_and_tool_result_messages_to_messages
+  def test_think_does_not_mutate_caller_messages_but_grows_conversation_for_next_call
     tool = simple_tool(name: "lookup", result: "found")
-    agent = make_agent(
-      [tool_call_response(id: "c1", name: "lookup"), finish_response],
-      tools: [tool]
-    )
+    recorded = []
+    adapter = Rixie::LLM::Adapter::Dummy.new([tool_call_response(id: "c1", name: "lookup"), finish_response])
+    adapter.define_singleton_method(:chat) do |messages, tools:, schema: nil|
+      recorded << messages
+      super(messages, tools: tools, schema: schema)
+    end
+    client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
+    agent = Rixie::Agent.new(instructions: "Be helpful.", tools: [tool], llm_client: client)
 
     messages = [Rixie::Message::User.new(content: "hello")]
     agent.think(messages: messages, listener: listener)
 
-    assert_equal 3, messages.size
-    assert_instance_of Rixie::Message::Assistant, messages[1]
-    assert_nil messages[1].content
-    assert_instance_of Rixie::Message::Tool, messages[2]
-    assert_equal "c1", messages[2].tool_call_id
-    assert_equal "found", messages[2].content
+    # The caller's array is left untouched.
+    assert_equal 1, messages.size
+
+    # The second LLM call sees the appended assistant + tool-result messages.
+    second_call = recorded[1]
+    assert_equal 3, second_call.size
+    assert_instance_of Rixie::Message::Assistant, second_call[1]
+    assert_nil second_call[1].content
+    assert_instance_of Rixie::Message::Tool, second_call[2]
+    assert_equal "c1", second_call[2].tool_call_id
+    assert_equal "found", second_call[2].content
   end
 
   def test_llm_call_is_private
     agent = make_agent([finish_response])
-    assert_raises(NoMethodError) { agent.llm_call(messages: [], listener: listener) }
+    assert_raises(NoMethodError) { agent.llm_call(messages: []) }
   end
 
   def test_think_raises_response_truncated_error_when_finish_reason_is_length
@@ -571,5 +580,65 @@ class AgentTest < Minitest::Test
     }]
     agent = make_agent(responses, tools: [], parallel_tool_calls: true)
     assert_raises(Rixie::ToolNotFoundError) { agent.think(messages: [], listener: listener) }
+  end
+
+  # --- structured output (schema:) ---
+
+  SCHEMA = {"type" => "object", "properties" => {"answer" => {"type" => "string"}}, "required" => ["answer"]}.freeze
+
+  def test_think_with_schema_returns_parsed_hash
+    agent = make_agent([finish_response(content: '{"answer":"42"}')])
+    result = agent.think(messages: [], listener: listener, schema: SCHEMA)
+    assert_equal({"answer" => "42"}, result.content)
+  end
+
+  def test_think_with_schema_emits_parsed_hash_on_finished_event
+    finished = nil
+    listener.on(Rixie::Event::Finished) { |envelope| finished = envelope.event.content }
+    agent = make_agent([finish_response(content: '{"answer":"yes"}')])
+    agent.think(messages: [], listener: listener, schema: SCHEMA)
+    assert_equal({"answer" => "yes"}, finished)
+  end
+
+  def test_think_with_schema_retries_finish_generation_on_invalid_json
+    agent = make_agent([
+      finish_response(content: "here is your answer"),
+      finish_response(content: '{"answer":"recovered"}')
+    ])
+    result = agent.think(messages: [], listener: listener, schema: SCHEMA)
+    assert_equal({"answer" => "recovered"}, result.content)
+  end
+
+  def test_think_with_schema_does_not_rerun_tool_calls_on_retry
+    calls = 0
+    tool = Rixie::Tool.new(name: "lookup", description: "d", input_schema: {}, call: lambda { |_|
+      calls += 1
+      "data"
+    })
+    agent = make_agent(
+      [
+        tool_call_response(id: "c1", name: "lookup"),
+        finish_response(content: "prose, not json"),
+        finish_response(content: '{"answer":"final"}')
+      ],
+      tools: [tool]
+    )
+    result = agent.think(messages: [], listener: listener, schema: SCHEMA)
+    assert_equal({"answer" => "final"}, result.content)
+    assert_equal 1, calls, "tool must run exactly once — the retry re-generates only the finish answer"
+  end
+
+  def test_think_with_schema_raises_when_retry_limit_exceeded
+    invalid = Array.new(6) { finish_response(content: "never valid json") }
+    agent = make_agent(invalid)
+    assert_raises(Rixie::SchemaValidationError) do
+      agent.think(messages: [], listener: listener, schema: SCHEMA)
+    end
+  end
+
+  def test_think_without_schema_returns_string
+    agent = make_agent([finish_response(content: "plain text")])
+    result = agent.think(messages: [], listener: listener)
+    assert_equal "plain text", result.content
   end
 end

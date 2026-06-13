@@ -12,6 +12,7 @@ module Rixie
   class AgentError < Error; end
   class MaxStepsExceededError < AgentError; end
   class ToolNotFoundError < AgentError; end
+  class SchemaValidationError < AgentError; end
 
   module LLM
     class Error < ::Rixie::Error; end

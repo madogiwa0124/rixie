@@ -4,7 +4,7 @@ module Rixie
   module Strategy
     class Simple
       def run(task:, listener:)
-        run = Run.new(user_input: task.user_input, agent: task.agent, context: task.context)
+        run = Run.new(user_input: task.user_input, agent: task.agent, context: task.context, schema: task.schema)
         task.runs << run
         run.execute(listener:)
         run.output

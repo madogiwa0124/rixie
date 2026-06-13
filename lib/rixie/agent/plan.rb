@@ -44,8 +44,8 @@ module Rixie
         @base_agent.tools + [PLAN_DONE_TOOL]
       end
 
-      def think(messages:, listener:)
-        internal_agent.think(messages:, listener:)
+      def think(messages:, listener:, schema: nil)
+        internal_agent.think(messages:, listener:, schema:)
       end
 
       private

@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Structured output: `Session#chat(user_input, schema: <JSON Schema Hash>)` returns a parsed
+  Ruby `Hash` conforming to the supplied JSON Schema instead of a `String`. The schema is applied
+  only to the final answer, so multi-step tool-calling flows (e.g. web search then a structured
+  answer) work as expected. The OpenAI adapter uses native `response_format: { type: "json_schema" }`;
+  other adapters fall back to prompt-based JSON with a corrective retry. Validation failures retry
+  the finish generation only (tool calls are never re-run) up to a bounded limit, after which
+  `Rixie::SchemaValidationError` is raised. `Session#live` raises `ArgumentError` if `schema:` is
+  passed, since streaming is incompatible with structured output.
+- `Rixie::Agent::StructuredOutput` — a pure parser/validator for structured output. `parse`
+  returns a `Result(value:, error:)` and `correction_message` builds the retry nudge; the
+  corrective retry loop lives in `Agent#think` (no `llm_client`/`listener` dependency).
+- `Rixie::SchemaValidationError` (under `Rixie::AgentError`) — raised when structured output cannot
+  be produced within the retry limit.
 - `Rixie::CLI.register_agent(name, instructions:, tools:, model:)` — register named agent presets
   that bundle a system prompt and tool set. Users switch between them at runtime with the new `/agent NAME`
   slash command. Switching rebuilds the `Session` while carrying over the existing conversation context.

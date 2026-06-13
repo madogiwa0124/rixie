@@ -34,8 +34,8 @@ module Rixie
         @base_agent.llm_client
       end
 
-      def think(messages:, listener:)
-        internal_agent.think(messages:, listener:)
+      def think(messages:, listener:, schema: nil)
+        internal_agent.think(messages:, listener:, schema:)
       end
 
       private

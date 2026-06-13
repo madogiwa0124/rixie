@@ -34,42 +34,59 @@ module Rixie
       )
     end
 
-    def think(messages:, listener:)
+    def think(messages:, listener:, schema: nil)
       thoughts = []
       tool_call_count = 0
       step_count = 0
+      # Work on a private copy so the caller's `messages` array is never mutated
+      # as `think` grows the conversation across the loop.
+      conversation = messages.dup
 
       loop do
         step_count += 1
-        listener.emit(Event::LlmCallStart.new(step_count: step_count, model: @llm_client.model, provider: @llm_client.provider))
-        thought, response = llm_call(messages:) { |event| listener.emit(event) }
-        usage = response.usage || calculate_token_usage(messages, response)
-        listener.emit(Event::LlmCallEnd.new(step_count: step_count, usage: usage, finish_reason: response.finish_reason))
+        thought = llm_call(
+          conversation:, step: step_count,
+          on_start: ->(step) { listener.emit(Event::LlmCallStart.new(step_count: step, model: @llm_client.model, provider: @llm_client.provider)) },
+          on_end: ->(step, usage, finish_reason) { listener.emit(Event::LlmCallEnd.new(step_count: step, usage: usage, finish_reason: finish_reason)) },
+          on_event: ->(event) { listener.emit(event) }
+        )
 
-        if thought.tool_call?
+        case thought.type
+        when :tool_call
           raise MaxStepsExceededError, "Max steps (#{@max_steps}) exceeded" if tool_call_count >= @max_steps
           tool_call_count += 1
-          results = call_thought_tools(
-            on_start: ->(tc) { listener.emit(Event::ToolCallStart.new(tool_call: tc)) },
-            thought: thought,
-            on_end: ->(tc, result) { listener.emit(Event::ToolCallEnd.new(tool_call: tc, result: result)) },
+          tool_results = call_thought_tools(
+            thought:,
+            on_start: ->(tool_call) { listener.emit(Event::ToolCallStart.new(tool_call:)) },
+            on_end: ->(tool_call, result) { listener.emit(Event::ToolCallEnd.new(tool_call:, result:)) },
             parallel: @parallel_tool_calls
           )
-
-          listener.emit(Event::ToolCallsCompleted.new(tool_calls: thought.tool_calls, tool_results: results))
-
-          thought = record_thought(thoughts, thought, results)
-          append_thought_messages(messages, thought)
-
+          listener.emit(Event::ToolCallsCompleted.new(tool_calls: thought.tool_calls, tool_results:))
+          thought = record_thought(thoughts, thought, tool_results)
+          append_thought_messages(conversation, thought)
           if @tool_executor.return_direct?(thought.tool_calls)
             listener.emit(Event::Finished.new(content: nil))
-            return ThinkResult.new(content: nil, thoughts: thoughts)
+            return ThinkResult.new(content: nil, thoughts:)
           end
-        elsif thought.finish?
+        when :finish
           thoughts << thought
-          listener.emit(Event::ThoughtCompleted.new(thought: thought))
-          listener.emit(Event::Finished.new(content: thought.content))
-          return ThinkResult.new(content: thought.content, thoughts: thoughts)
+          content = thought.content
+          if schema
+            # Schema is applied only here: the main loop runs unconstrained. On
+            # validation failure ONLY the finish answer is re-generated (schema
+            # applied, tools dropped) — tool calls are never re-run.
+            result = generate_structured_output(
+              conversation:, content:, schema:, start_step: step_count,
+              max_retries: StructuredOutput::DEFAULT_MAX_RETRIES,
+              on_start: ->(step) { listener.emit(Event::LlmCallStart.new(step_count: step, model: @llm_client.model, provider: @llm_client.provider)) },
+              on_end: ->(step, usage, finish_reason) { listener.emit(Event::LlmCallEnd.new(step_count: step, usage: usage, finish_reason: finish_reason)) },
+              on_event: ->(event) { listener.emit(event) }
+            )
+            content = result.value
+          end
+          listener.emit(Event::ThoughtCompleted.new(thought:))
+          listener.emit(Event::Finished.new(content:))
+          return ThinkResult.new(content:, thoughts:)
         else
           raise Rixie::AgentError, "Unknown thought type: #{thought.type.inspect}"
         end
@@ -78,8 +95,8 @@ module Rixie
 
     private
 
-    def calculate_token_usage(messages, response)
-      input_tokens = @token_counter.call(messages)
+    def calculate_token_usage(conversation, response)
+      input_tokens = @token_counter.call(conversation)
       output_tokens = @token_counter.call([response])
       {input_tokens: input_tokens, output_tokens: output_tokens}
     end
@@ -114,20 +131,57 @@ module Rixie
       thought
     end
 
-    def append_thought_messages(messages, thought)
-      messages << Message::Assistant.new(content: thought.content, tool_calls: thought.tool_calls)
-      thought.tool_results.each { |r| messages << Message::Tool.new(tool_call_id: r.tool_call_id, content: r.content) }
+    # Appends a completed tool-call thought to the conversation buffer: the
+    # assistant turn plus one tool-result message per tool call. Mutates the
+    # `conversation` buffer, which `think` owns (a dup of the caller's array).
+    def append_thought_messages(conversation, thought)
+      conversation << Message::Assistant.new(content: thought.content, tool_calls: thought.tool_calls)
+      thought.tool_results.each { |r| conversation << Message::Tool.new(tool_call_id: r.tool_call_id, content: r.content) }
     end
 
-    def llm_call(messages:, &on_event)
-      response = @llm_client.call(messages, tools: @tool_executor.definitions) { |event| on_event.call(event) }
+    # Owns the structured-output retry loop. Parses `content` against the schema
+    # via the pure `StructuredOutput`, and on failure appends a corrective message
+    # and re-generates ONLY the finish answer (`llm_call` with schema, tools
+    # dropped) until it conforms or `max_retries` is exhausted. Emission is
+    # injected (`on_start` / `on_end` / `on_event`) so it stays in the public
+    # `think` (see .claude/rules/events.md). Returns a `StructuredOutput::Result`.
+    # `start_step` is the step number of the original finish call; each retry is a
+    # further LLM call, numbered `start_step + attempts` for event continuity.
+    def generate_structured_output(conversation:, content:, schema:, start_step:, max_retries:, on_start:, on_end:, on_event:)
+      structured = StructuredOutput.new(schema:)
+      result = structured.parse(content)
+      attempts = 0
+
+      until result.valid?
+        raise SchemaValidationError, "Failed to produce schema-conforming output after #{max_retries} retries: #{result.error}" if attempts >= max_retries
+        attempts += 1
+        conversation << structured.correction_message(content, result.error)
+        content = llm_call(conversation:, step: start_step + attempts, schema:, on_start:, on_end:, on_event:).content
+        result = structured.parse(content)
+      end
+
+      result
+    end
+
+    # One LLM turn with its LlmCall* lifecycle: fires `on_start` before the call
+    # and `on_end` after (with the resolved usage), and returns the decoded
+    # Thought. Holds no `listener` reference — emission is the caller's concern,
+    # passed via the `on_start` / `on_end` / `on_event` (per-token) lambdas.
+    def llm_call(conversation:, step:, on_start:, on_end:, on_event:, schema: nil)
+      on_start.call(step)
+      # The schema-constrained finish request drops tools: some providers cannot
+      # combine tool calling and structured output in the same request, and the
+      # finish turn never calls a tool.
+      tools = schema ? [] : @tool_executor.definitions
+      response = @llm_client.call(conversation, tools:, schema:) { on_event.call(it) }
       raise LLM::ResponseTruncatedError, "LLM response truncated (finish_reason=length)" if response.finish_reason == "length"
-      thought = if response.has_tool_calls?
+      usage = response.usage || calculate_token_usage(conversation, response)
+      on_end.call(step, usage, response.finish_reason)
+      if response.has_tool_calls?
         Thought.new(type: :tool_call, content: response.content, tool_calls: response.tool_calls, tool_results: nil)
       else
         Thought.new(type: :finish, content: response.content, tool_calls: [], tool_results: nil)
       end
-      [thought, response]
     end
   end
 end

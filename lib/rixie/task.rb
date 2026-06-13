@@ -4,15 +4,16 @@ require "securerandom"
 
 module Rixie
   class Task
-    attr_reader :id, :user_input, :agent, :context, :strategy, :runs, :status, :output
+    attr_reader :id, :user_input, :agent, :context, :strategy, :runs, :status, :output, :schema
 
-    def initialize(user_input:, agent:, context:, strategy:, subscribers: [], session_id: nil)
+    def initialize(user_input:, agent:, context:, strategy:, subscribers: [], session_id: nil, schema: nil)
       @id = SecureRandom.uuid
       @session_id = session_id
       @user_input = user_input
       @agent = agent
       @context = context
       @strategy = strategy
+      @schema = schema
       @subscribers = subscribers
       @runs = []
       @status = "running"

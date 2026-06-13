@@ -38,6 +38,7 @@ Navigation map only. Read the source for signatures; consult **Key Design Decisi
 | `Run` | Wraps one `Agent#think` call. Unwraps `ThinkResult` into output + thoughts. |
 | `Agent` | Think+act loop. Owns `@tool_executor`. Returns `ThinkResult(content:, thoughts:)`. |
 | `Agent::{Plan,ReAct}` | Subtypes wrapping a base agent with phase-specific instructions. `ReAct` forces `parallel_tool_calls: false`. |
+| `Agent::StructuredOutput` | Pure parser/validator of the agent's `:finish` answer against a JSON Schema. `parse` returns a `Result(value:, error:)`; `correction_message` builds the retry nudge. No LLM/listener/loop — `Agent#think` owns the retry loop. |
 | `Agent::Thought` | `Data.define(:type, :content, :tool_calls, :tool_results)`. `:tool_call` or `:finish`. |
 | `Strategy::{Simple,PlanExecute,ReAct}` | How many Runs a Task executes. Lives on Task, not Agent. |
 | `Context::{History,Plan,Summary}` | Conversation entries. Each implements `to_message`. |
@@ -69,7 +70,12 @@ Tool calling is a basic protocol of any tool-capable agent, not a strategy. The 
 Each iteration of the think loop produces one `Thought`. For `:tool_call` iterations, `tool_results` is filled in after the executor runs (via `Thought#with(tool_results: ...)`). For `:finish` iterations, `tool_results` stays `nil`. This eliminates the prior split between "Thought (pre-execution)" and "Step (post-execution)", and lets `Agent#think` return the full per-iteration history via `ThinkResult.thoughts`. `Run` simply unwraps the result — no event-driven step accumulation needed.
 
 **`Event::Finished` is the Run-terminal singleton.**
-`Finished` fires exactly once per `Agent#think` call, on every exit path. On the normal `:finish` path it carries the LLM's final content (`content: String`). On the `return_direct` path (a tool was marked `return_direct: true`), it carries `content: nil`. Subscribers can rely on "see `Finished` → the Run is done", without caring about which path was taken. `Token` and `ThoughtCompleted` are interior events; `Finished` is always last.
+`Finished` fires exactly once per `Agent#think` call, on every exit path. On the normal `:finish` path it carries the LLM's final content (`content: String`, or a parsed `Hash` when `schema:` was supplied). On the `return_direct` path (a tool was marked `return_direct: true`), it carries `content: nil`. Subscribers can rely on "see `Finished` → the Run is done", without caring about which path was taken. `Token` and `ThoughtCompleted` are interior events; `Finished` is always last.
+
+**Structured output is parsed at finish time, not modeled as a tool.**
+Structured output is the *shape of the final answer*, not an action, so it deliberately does **not** reuse the tool-calling abstraction (contrast with `Agent::Plan`'s `plan_done`). `schema:` threads `Session#chat → Task → Strategy → Run → Agent#think`. The think loop runs **unconstrained** — tool-calling iterations never carry the schema, so tool flows and providers that cannot combine tools + structured output are unaffected. Only on the `:finish` branch (when `schema:` is present) does `Agent#think` delegate to the private `generate_structured_output`, which parses the answer via `Agent::StructuredOutput#parse` and, on failure, appends `StructuredOutput#correction_message` and re-generates **only the finish answer** (`llm_call` with `schema:` and tools dropped), then parses again — tool calls are never re-run, avoiding duplicate side effects. Exceeding `max_retries` (`StructuredOutput::DEFAULT_MAX_RETRIES`) raises `Rixie::SchemaValidationError`.
+
+`StructuredOutput` is a **pure** parser/validator — no `llm_client`, no `listener`, no loop. The retry loop lives in `Agent`'s private `generate_structured_output`, not injected into `StructuredOutput` as a callback: `Agent` already owns LLM-calling (the private `llm_call`), so the loop calls `llm_call` directly — no inverted control flow. Only *emission* is injected (`on_start` / `on_end` / `on_event` lambdas built in the public `think`), keeping every `listener.emit` in the public method, exactly as `call_thought_tools` and `llm_call` already do (see [events.md](.claude/rules/events.md)). For `PlanExecute`, the schema constrains only the **final** step; the plan phase and intermediate steps run unconstrained. `Session#live` rejects `schema:` with `ArgumentError` — streaming requires the complete response to validate and is fundamentally incompatible with structured output.
 
 **`max_steps` caps `:tool_call` iterations; checked as a precondition of the tool_call branch.**
 The check happens after `llm_call` returns but **before** incrementing the counter and executing tools. This gives:
@@ -108,7 +114,8 @@ Rixie::Error                      # base
   ├─ Rixie::NotImplementedError     # raised by abstract Base classes (Search, Store, Subscriber)
   ├─ Rixie::AgentError
   │    ├─ MaxStepsExceededError
-  │    └─ ToolNotFoundError
+  │    ├─ ToolNotFoundError
+  │    └─ SchemaValidationError
   ├─ Rixie::LLM::Error
   │    └─ ResponseTruncatedError
   ├─ Rixie::Http::Error
@@ -148,7 +155,7 @@ Built-in providers: `openai`, `ollama`. Other OpenAI-compatible endpoints (GitHu
 
 ```
 lib/rixie/
-  agent.rb, agent/          # Core domain object + Plan / ReAct subtypes, ToolCall
+  agent.rb, agent/          # Core domain object + Plan / ReAct / Compressor / StructuredOutput subtypes
   session.rb                # Primary entry point
   task.rb, run.rb           # Execution units
   context/                  # History, Plan — implement to_message

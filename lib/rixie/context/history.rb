@@ -22,7 +22,12 @@ module Rixie
           end
         end
 
-        messages << Message::Assistant.new(content: @output, tool_calls: []) unless @output.nil?
+        unless @output.nil?
+          # Structured output is a Hash; serialize it back to JSON so the assistant
+          # message carries a String in subsequent turns.
+          content = @output.is_a?(String) ? @output : JSON.generate(@output)
+          messages << Message::Assistant.new(content: content, tool_calls: [])
+        end
         messages
       end
 
