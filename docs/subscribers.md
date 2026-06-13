@@ -175,115 +175,48 @@ end
 
 ## Adding custom subscribers
 
-Implement `Rixie::Subscriber` and pass instances to `Session`. Here's an example that creates [OpenTelemetry](https://opentelemetry.io/) spans following the [GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/). (Rixie ships a built-in [`Subscribers::OpenTelemetry`](#opentelemetry) — this walkthrough shows how you would build such an integration yourself, and demonstrates the `Envelope` API along the way.)
+Implement `Rixie::Subscriber` and pass instances to `Session`. The example below builds a simple metrics collector that counts tokens, tool calls, and runs per session — demonstrating the `Envelope` API along the way.
 
 ```ruby
-require "opentelemetry/sdk"
+class MetricsSubscriber < Rixie::Subscriber
+  attr_reader :metrics
 
-class OpenTelemetrySubscriber < Rixie::Subscriber
-  def initialize(tracer: OpenTelemetry.tracer_provider.tracer("my-app"))
-    @tracer = tracer
+  def initialize
+    @metrics = Hash.new { |h, k| h[k] = {tokens_in: 0, tokens_out: 0, tool_calls: 0, runs: 0} }
   end
 
   def subscribe(listener)
-    task_data = {}
-    run_data  = {}
-    llm_spans = {}
-    tool_spans = {}
-
-    listener.on(Rixie::Event::TaskStart) do |envelope|
-      span = @tracer.start_span("invoke_agent", kind: :client, attributes: {
-        "gen_ai.operation.name" => "invoke_agent"
-      })
-      ctx = OpenTelemetry::Trace.context_with_span(span)
-      task_data[envelope.task_id] = {span: span, ctx: ctx}
-    end
-
-    listener.on(Rixie::Event::TaskEnd) do |envelope|
-      entry = task_data.delete(envelope.task_id)
-      next unless entry
-      span = entry[:span]
-      span.status = envelope.event.status == "completed" \
-        ? OpenTelemetry::Trace::Status.ok
-        : OpenTelemetry::Trace::Status.error("task #{envelope.event.status}")
-      span.finish
-    end
-
     listener.on(Rixie::Event::RunStart) do |envelope|
-      parent_ctx = task_data[envelope.task_id]&.fetch(:ctx)
-      span = @tracer.start_span("run", with_parent: parent_ctx, kind: :internal)
-      ctx = OpenTelemetry::Trace.context_with_span(span)
-      run_data[envelope.run_id] = {span: span, ctx: ctx}
-    end
-
-    listener.on(Rixie::Event::RunEnd) do |envelope|
-      entry = run_data.delete(envelope.run_id)
-      next unless entry
-      span = entry[:span]
-      span.status = envelope.event.status == "completed" \
-        ? OpenTelemetry::Trace::Status.ok
-        : OpenTelemetry::Trace::Status.error("run #{envelope.event.status}")
-      span.finish
-    end
-
-    listener.on(Rixie::Event::LlmCallStart) do |envelope|
-      e = envelope.event
-      parent_ctx = run_data[envelope.run_id]&.fetch(:ctx)
-      span = @tracer.start_span("chat #{e.model}", with_parent: parent_ctx, kind: :client, attributes: {
-        "gen_ai.operation.name" => "chat",
-        "gen_ai.system"         => e.provider,
-        "gen_ai.request.model"  => e.model
-      }.compact)
-      llm_spans["#{envelope.run_id}:#{e.step_count}"] = span
+      @metrics[envelope.session_id][:runs] += 1
     end
 
     listener.on(Rixie::Event::LlmCallEnd) do |envelope|
-      e    = envelope.event
-      span = llm_spans.delete("#{envelope.run_id}:#{e.step_count}")
-      next unless span
-      span.set_attribute("gen_ai.usage.input_tokens",        e.usage[:input_tokens])  if e.usage[:input_tokens]
-      span.set_attribute("gen_ai.usage.output_tokens",       e.usage[:output_tokens]) if e.usage[:output_tokens]
-      span.set_attribute("gen_ai.response.finish_reasons",   [e.finish_reason].compact) if e.finish_reason
-      span.finish
-    end
-
-    listener.on(Rixie::Event::ToolCallStart) do |envelope|
-      tc = envelope.event.tool_call
-      parent_ctx = run_data[envelope.run_id]&.fetch(:ctx)
-      span = @tracer.start_span("execute_tool #{tc.name}", with_parent: parent_ctx, kind: :internal, attributes: {
-        "gen_ai.operation.name" => "execute_tool",
-        "gen_ai.tool.name"      => tc.name,
-        "gen_ai.tool.call.id"   => tc.id
-      })
-      tool_spans[tc.id] = span
+      usage = envelope.event.usage
+      @metrics[envelope.session_id][:tokens_in]  += usage[:input_tokens].to_i
+      @metrics[envelope.session_id][:tokens_out] += usage[:output_tokens].to_i
     end
 
     listener.on(Rixie::Event::ToolCallEnd) do |envelope|
-      result = envelope.event.result
-      span   = tool_spans.delete(envelope.event.tool_call.id)
-      next unless span
-      span.status = result.error? \
-        ? OpenTelemetry::Trace::Status.error(result.error.message)
-        : OpenTelemetry::Trace::Status.ok
-      span.finish
+      @metrics[envelope.session_id][:tool_calls] += 1
+    end
+
+    listener.on(Rixie::Event::TaskEnd) do |envelope|
+      m = @metrics[envelope.session_id]
+      puts "[#{envelope.session_id}] task #{envelope.event.status}: " \
+           "#{m[:runs]} run(s), #{m[:tool_calls]} tool call(s), " \
+           "#{m[:tokens_in] + m[:tokens_out]} tokens"
     end
   end
 end
 
+metrics = MetricsSubscriber.new
 session = Rixie::Session.new(
   instructions: "You are a helpful assistant.",
-  subscribers:  [OpenTelemetrySubscriber.new]
+  subscribers:  [metrics]
 )
-```
-
-This produces a span tree like:
-
-```
-invoke_agent                          # Task
-  └─ run                             # Run
-       └─ chat gpt-4.1               # LlmCall #1
-       └─ execute_tool web_search    # ToolCall
-       └─ chat gpt-4.1               # LlmCall #2
+session.chat("What is 2 + 2?")
+p metrics.metrics
+# => {"session-uuid" => {tokens_in: 42, tokens_out: 11, tool_calls: 0, runs: 1}}
 ```
 
 Each event is delivered as an `Event::Envelope` that includes the domain event plus metadata:
