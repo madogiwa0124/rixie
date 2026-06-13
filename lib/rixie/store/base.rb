@@ -54,7 +54,7 @@ module Rixie
       end
 
       def preview_from(entries)
-        history = entries.rfind { |entry| entry["type"] == "history" }
+        history = entries.reverse_each.find { it["type"] == "history" }
         return "(no messages)" if history.nil?
 
         input = history["input"].to_s.strip
