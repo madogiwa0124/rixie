@@ -20,6 +20,14 @@ module Rixie
     def current_context_length = session.context.size
     def compress!(keep_recent: 0) = session.compress!(keep_recent: keep_recent)
 
+    # Framework-level configuration. The framework ships no opinionated
+    # defaults — the reference app (bin/rixie) wires up tools and the system
+    # prompt so that `Rixie::CLI.start` stays a blank slate for custom CLIs.
+    class << self
+      attr_accessor :default_instructions, :default_strategy
+    end
+    @default_instructions = nil
+    @default_strategy = "simple"
     @extra_commands = []
     @extra_tools = []
     @extra_agents = {}
@@ -69,7 +77,7 @@ module Rixie
     end
 
     def initialize(argv)
-      @options = {instructions: Instructions::DEFAULT}
+      @options = {}
 
       parser = OptionParser.new do |opts|
         opts.banner = "Usage: rixie [options]"
@@ -141,7 +149,7 @@ module Rixie
       @current_agent_name = nil
       @current_agent_options = nil
       @session = @options[:resume] ? build_resumed_session : build_session
-      @strategy_name = "simple"
+      @strategy_name = self.class.default_strategy
       setup_completion
 
       while (input = Reline.readline(renderer.prompt(@strategy_name), true))
@@ -241,29 +249,15 @@ module Rixie
     end
 
     def current_agent_instructions
-      @current_agent_options&.fetch(:instructions, nil) || @options[:instructions]
+      @current_agent_options&.fetch(:instructions, nil) || @options[:instructions] || self.class.default_instructions
     end
 
     def current_agent_tools
-      @current_agent_options&.key?(:tools) ? @current_agent_options[:tools] : default_tools + self.class.extra_tools
+      @current_agent_options&.key?(:tools) ? @current_agent_options[:tools] : self.class.extra_tools
     end
 
     def cli_store
       @cli_store ||= Rixie.config.store || Rixie::Store::File.new
-    end
-
-    def default_tools
-      [
-        Rixie::Tool::HumanInput,
-        Rixie::Tool::Fetch,
-        Rixie::Tool::WebSearch,
-        Rixie::Tool::WikipediaSearch,
-        Rixie::Tool::FileRead,
-        Rixie::Tool::FileList,
-        Rixie::Tool::FileSearch,
-        Rixie::Tool::CurrentTime,
-        Rixie::Tool::Calculator
-      ]
     end
 
     def handle_input(input)

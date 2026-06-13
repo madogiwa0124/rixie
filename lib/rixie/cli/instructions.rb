@@ -2,9 +2,12 @@
 
 module Rixie
   class CLI
-    # System prompts for the interactive CLI. DEFAULT is used unless
-    # overridden with --instructions. Kept in its own file so prompt wording
-    # changes don't touch the REPL wiring in cli.rb.
+    # System prompt presets for interactive CLIs. The framework does not impose
+    # DEFAULT — the reference app (bin/rixie) opts in via
+    # `Rixie::CLI.default_instructions = Instructions::DEFAULT`, the same way it
+    # opts into built-in tools. Custom CLIs may reuse this preset or supply their
+    # own prompt. Kept in its own file so prompt wording changes don't touch the
+    # REPL wiring in cli.rb.
     module Instructions
       DEFAULT = <<~INSTRUCTIONS
         You are a helpful assistant running in an interactive CLI.

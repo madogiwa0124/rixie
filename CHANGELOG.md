@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   slash command. Switching rebuilds the `Session` while carrying over the existing conversation context.
   `model:` is optional and overrides the current model when the preset is activated.
 - `/agent [NAME]` slash command with tab completion for preset names.
+- `Rixie::CLI.default_instructions` and `Rixie::CLI.default_strategy` class accessors,
+  letting a custom CLI set framework-wide defaults for the system prompt and the
+  startup strategy.
 - `provider_params:` option on `Session` and `LLM::Client`, and `config.default_provider_params`,
   to pass arbitrary parameters directly to the provider API.
   Use this to supply model-specific parameters such as `max_completion_tokens:` for GPT-5
@@ -37,6 +40,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `max_body_size:` option on `Http::Client` (default 10 MiB). The decoded response
   body is capped, and gzip/deflate decompression aborts as soon as the cap is
   exceeded, guarding against oversized responses and compression bombs.
+
+### Changed
+
+- `Rixie::CLI` is now a blank-slate framework: `Rixie::CLI.start` no longer registers
+  the built-in tools or a default system prompt on its own. The built-in tool set and
+  the default prompt (`Rixie::CLI::Instructions::DEFAULT`) are now wired up by the reference
+  app (`bin/rixie`) instead. Custom CLIs register only the tools they need and set their own
+  prompt via `Rixie::CLI.default_instructions`. The `bundle exec rixie` experience is unchanged.
 
 ### Fixed
 

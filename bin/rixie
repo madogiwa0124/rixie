@@ -4,4 +4,22 @@
 require "rixie"
 require "rixie/cli"
 
+# bin/rixie is the reference CLI app built on the Rixie::CLI framework.
+# The framework itself ships no tools or system prompt — they are wired up
+# here so that `Rixie::CLI.start` stays a blank slate for building custom CLIs.
+
+Rixie::CLI.default_instructions = Rixie::CLI::Instructions::DEFAULT
+
+[
+  Rixie::Tool::HumanInput,
+  Rixie::Tool::Fetch,
+  Rixie::Tool::WebSearch,
+  Rixie::Tool::WikipediaSearch,
+  Rixie::Tool::FileRead,
+  Rixie::Tool::FileList,
+  Rixie::Tool::FileSearch,
+  Rixie::Tool::CurrentTime,
+  Rixie::Tool::Calculator
+].each { |tool| Rixie::CLI.register_tool(tool) }
+
 Rixie::CLI.start(ARGV)

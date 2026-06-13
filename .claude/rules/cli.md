@@ -15,6 +15,12 @@ CLI                          # REPL loop, option parsing, session lifecycle
 └── Commands::*              # One class per slash command; delegates output to Renderer
 ```
 
+## Framework vs. Reference App
+
+`Rixie::CLI` is a **framework** for building interactive CLIs — it ships no opinionated defaults. It registers no tools and sets no system prompt; `Rixie::CLI.start` on its own is a blank-slate assistant on the `simple` strategy. The opinionated wiring (the built-in tool set, the `Instructions::DEFAULT` prompt) lives in the **reference app**, `bin/rixie`, which registers tools via `register_tool` and sets `default_instructions` before calling `start`.
+
+Do not reintroduce default tools or a default prompt inside `cli.rb`. New built-in capabilities that are part of the *rixie reference experience* are wired up in `bin/rixie`; the framework only exposes the registration hooks (`register_tool`, `register_agent`, `register_command`) and the `default_instructions` / `default_strategy` accessors.
+
 ## Responsibility Boundaries
 
 - **Input is CLI's responsibility.** `CLI` owns the `Reline.readline` loop. No other class reads from stdin or prompts the user, with one exception: `SessionPicker` prompts during the `-r` startup flow, before the REPL begins. It is constructed and invoked only by `CLI`; Commands and Renderer must never read input.

@@ -206,6 +206,9 @@ weather_tool = Rixie::Tool.new(
 
 Rixie::CLI.register_tool(weather_tool)
 Rixie::CLI.start
+```
+
+> The framework ships **no built-in tools**. `Rixie::CLI.start` on its own gives a tool-less assistant — the reference app (`bin/rixie`) registers the built-in tools (`HumanInput`, `Fetch`, `WebSearch`, `WikipediaSearch`, `FileRead`, `FileList`, `FileSearch`, `CurrentTime`, `Calculator`) via `register_tool`. Register only the tools your CLI needs.
 
 ## Agent presets
 
@@ -230,8 +233,8 @@ Rixie::CLI.start
 
 | Option         | Required | Description                                                                                          |
 | -------------- | -------- | ---------------------------------------------------------------------------------------------------- |
-| `instructions` | No       | System prompt for this agent. Defaults to the CLI `--instructions` value (or the built-in default). |
-| `tools`        | No       | Tools available to this agent. Defaults to the full built-in tool set plus any registered tools.     |
+| `instructions` | No       | System prompt for this agent. Defaults to the CLI `--instructions` value, then `Rixie::CLI.default_instructions`. |
+| `tools`        | No       | Tools available to this agent. Defaults to the tools registered via `Rixie::CLI.register_tool`.       |
 | `model`        | No       | Model to use when this agent is active. Defaults to the current model.                               |
 
 Switching agents rebuilds the `Session` but carries over the existing conversation context — the same behaviour as `/model`.
@@ -242,4 +245,23 @@ Switching agents rebuilds the `Session` but carries over the existing conversati
 ```
 
 Tab completion works for preset names: type `/agent ` and press Tab.
+
+## Framework defaults
+
+`Rixie::CLI` is a framework for building interactive CLIs — it ships **no opinionated defaults**. `Rixie::CLI.start` on its own gives a tool-less assistant with no system prompt, starting on the `simple` strategy. The reference app (`bin/rixie`) is what wires up the full Rixie experience:
+
+```ruby
+# bin/rixie
+Rixie::CLI.default_instructions = Rixie::CLI::Instructions::DEFAULT
+[Rixie::Tool::HumanInput, Rixie::Tool::Fetch, ...].each { |t| Rixie::CLI.register_tool(t) }
+Rixie::CLI.start(ARGV)
 ```
+
+Two class-level accessors let a custom CLI set its own framework-wide defaults:
+
+| Accessor                          | Default    | Description                                                                                 |
+| --------------------------------- | ---------- | ------------------------------------------------------------------------------------------- |
+| `Rixie::CLI.default_instructions` | `nil`      | System prompt used when neither `--instructions` nor an agent preset supplies one.          |
+| `Rixie::CLI.default_strategy`     | `"simple"` | Strategy selected at startup (`simple`, `plan-execute`, or `re-act`).                        |
+
+`Rixie::CLI::Instructions::DEFAULT` is a ready-made system prompt the framework provides as a preset — `bin/rixie` opts into it, but custom CLIs are free to ignore it and supply their own.
