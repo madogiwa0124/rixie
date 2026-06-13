@@ -683,7 +683,7 @@ class SessionTest < Minitest::Test
 
     bad_compressor = Object.new
     bad_compressor.define_singleton_method(:instructions) { nil }
-    bad_compressor.define_singleton_method(:think) { |**_| raise RuntimeError, "compression boom" }
+    bad_compressor.define_singleton_method(:think) { |**_| raise "compression boom" }
 
     assert_raises(RuntimeError) { session.compress!(compressor: bad_compressor) }
     assert_equal 1, received.size
