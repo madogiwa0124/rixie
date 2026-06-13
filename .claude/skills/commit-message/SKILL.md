@@ -1,6 +1,6 @@
 ---
 name: commit-message
-description: "Generates a structured Git commit message (header + Motivation / Overview / Main Changes / Breaking Changes sections) from staged diffs. Use when the user asks to write or generate a commit message."
+description: "Generates a structured Git commit message (header + Motivation / Overview / Main Changes / Breaking Changes sections) from staged diffs. Use proactively whenever creating a git commit — do not write commit messages manually. Also use when the user explicitly asks to write or generate a commit message."
 argument-hint: "Optionally paste extra context. The skill runs git diff automatically."
 ---
 
