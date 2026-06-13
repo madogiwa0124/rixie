@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../support/simplecov"
+
 $LOAD_PATH.unshift File.expand_path("../../lib", __dir__)
 
 require "minitest/autorun"

@@ -559,4 +559,17 @@ class AgentTest < Minitest::Test
 
     assert_equal [:llm_call_end, :finished], events
   end
+
+  def test_concurrent_map_re_raises_tool_not_found_error
+    # ToolNotFoundError propagates through the thread rescue in concurrent_map,
+    # covering the first_error non-nil branches.
+    responses = [{
+      "choices" => [{"message" => {
+        "content" => nil,
+        "tool_calls" => [{"id" => "c1", "function" => {"name" => "nonexistent", "arguments" => "{}"}}]
+      }}]
+    }]
+    agent = make_agent(responses, tools: [], parallel_tool_calls: true)
+    assert_raises(Rixie::ToolNotFoundError) { agent.think(messages: [], listener: listener) }
+  end
 end

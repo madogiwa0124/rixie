@@ -28,4 +28,17 @@ namespace :test do
   end
 end
 
+desc "Run unit + integration tests with coverage; writes coverage/index.html"
+task :coverage do
+  ENV["COVERAGE"] = "1"
+
+  # Each suite runs in its own process; distinct command names let SimpleCov
+  # merge the two result sets instead of the second overwriting the first.
+  ENV["COVERAGE_COMMAND"] = "unit"
+  Rake::Task["test"].invoke
+
+  ENV["COVERAGE_COMMAND"] = "integration"
+  Rake::Task["test:integration"].invoke
+end
+
 task default: %i[standard test]

@@ -26,11 +26,11 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-      - name: Run the default task
-        run: bundle exec rake
+      - name: Lint
+        run: bundle exec rake standard
 
-      - name: Run integration tests
-        run: bundle exec rake test:integration
+      - name: Run unit + integration tests with coverage
+        run: bundle exec rake coverage
 
       - name: Audit dependencies for vulnerabilities
         run: bundle exec rake audit

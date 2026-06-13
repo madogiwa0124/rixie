@@ -69,4 +69,15 @@ class ConfigurationTest < Minitest::Test
 
     assert_equal 0.7, Rixie.config.default_temperature
   end
+
+  def test_log_level_setter_with_nil_logger_does_not_raise
+    Rixie.config.logger = nil
+    Rixie.config.log_level = :debug
+    assert_equal :debug, Rixie.config.log_level
+  end
+
+  def test_logger_setter_with_nil_clears_logger
+    Rixie.config.logger = nil
+    assert_nil Rixie.config.logger
+  end
 end

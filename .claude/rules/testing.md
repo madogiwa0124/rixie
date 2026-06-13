@@ -9,6 +9,19 @@
 
 Unit tests target a single class. Integration tests construct a real `Session` and assert on behavior observable from the outside (output, task/run state).
 
+## Coverage
+
+```bash
+bundle exec rake coverage   # unit + integration with SimpleCov; writes coverage/index.html
+```
+
+Coverage is opt-in via the `COVERAGE` env var (set by `rake coverage`); plain `rake test` does not instrument. Setup lives in `test/support/simplecov.rb`, required at the top of both test helpers before `rixie` loads.
+
+- **The two suites run as separate processes and SimpleCov merges their results.** Each sets a distinct `COVERAGE_COMMAND` (`unit` / `integration`) so the results merge rather than overwrite.
+- **The CLI layer is excluded** (`add_filter "rixie/cli"`) — it is verified manually / via the integration smoke test, not unit-tested (see [cli.md](cli.md)).
+- **A regression floor is enforced via `minimum_coverage`**, but only in the integration process (the last one, which sees the merged result — the unit-only result would be below the floor and fail spuriously). CI runs `rake coverage`, so the floor gates merges.
+- **Target: line 95% / branch 80%** (CLI excluded). Do not lower the floor. When you add tests that raise coverage, raise the floor in the same change.
+
 ## Injecting Fake LLM Responses
 
 All tests use `Rixie::LLM::Adapter::Dummy` — no real HTTP requests are made unless running in live mode.

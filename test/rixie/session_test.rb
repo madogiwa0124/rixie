@@ -632,4 +632,62 @@ class SessionTest < Minitest::Test
     assert_equal 1, received.first.event.entry_count
     assert_equal 1, received.first.event.keep_recent
   end
+
+  def test_compress_with_tool_calls_in_context_covers_tool_message_type
+    tool = Rixie::Tool.new(name: "lookup", description: "Look up info", input_schema: {}, call: ->(_) { "result" })
+    session = make_session([
+      tool_call_response(id: "c1", name: "lookup"),
+      finish_response(content: "The answer is result"),
+      finish_response(content: "Summary including tool result")
+    ], tools: [tool])
+    session.chat("Look something up")
+    # History now has a tool_call thought → to_message yields Message::Tool entries
+    session.compress!
+    assert_instance_of Rixie::Context::Summary, session.context.first
+    assert_equal "Summary including tool result", session.context.first.content
+  end
+
+  def test_compress_with_existing_summary_covers_system_message_type
+    # First compress → summary. Second compress → Summary is in to_compress,
+    # whose to_message yields Message::System, covering that branch.
+    session = make_session([
+      finish_response(content: "Turn 1"),
+      finish_response(content: "First summary"),
+      finish_response(content: "Turn 2"),
+      finish_response(content: "Second summary")
+    ])
+    session.chat("First message")
+    session.compress!
+    session.chat("Second message")
+    session.compress!
+    assert_instance_of Rixie::Context::Summary, session.context.first
+    assert_equal "Second summary", session.context.first.content
+  end
+
+  def test_compress_reraises_error_and_emits_failed_compression_end
+    received = []
+    sub = Class.new(Rixie::Subscriber) do
+      def initialize(received) = (@received = received)
+
+      def subscribe(listener)
+        listener.on(Rixie::Event::CompressionEnd) { |envelope| @received << envelope }
+      end
+    end.new(received)
+
+    session = Rixie::Session.new(
+      instructions: "Be helpful.",
+      llm_client: make_client([finish_response(content: "Turn 1")]),
+      subscribers: [sub]
+    )
+    session.chat("Hello")
+
+    bad_compressor = Object.new
+    bad_compressor.define_singleton_method(:instructions) { nil }
+    bad_compressor.define_singleton_method(:think) { |**_| raise RuntimeError, "compression boom" }
+
+    assert_raises(RuntimeError) { session.compress!(compressor: bad_compressor) }
+    assert_equal 1, received.size
+    assert_equal "failed", received.first.event.status
+    assert_nil received.first.event.entry_count
+  end
 end

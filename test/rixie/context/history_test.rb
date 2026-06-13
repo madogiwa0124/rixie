@@ -88,4 +88,12 @@ class HistoryTest < Minitest::Test
     messages = history.to_message
     assert_equal 2, messages.size
   end
+
+  def test_to_message_omits_assistant_message_when_output_is_nil
+    # return_direct path: the run ends without a final LLM text response
+    history = Rixie::Context::History.new(input: "q", thoughts: [], output: nil)
+    messages = history.to_message
+    assert_equal 1, messages.size
+    assert_instance_of Rixie::Message::User, messages.first
+  end
 end

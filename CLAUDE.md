@@ -10,9 +10,10 @@ A Ruby gem for AI agent orchestration. Provides autonomous execution of AI agent
 ## Development Commands
 
 ```bash
-bundle install       # install dependencies
-bundle exec rake     # run lint and all tests
-bundle exec rake test # run tests
+bundle install            # install dependencies
+bundle exec rake          # run lint and all tests
+bundle exec rake test     # run tests
+bundle exec rake coverage # run unit + integration tests with coverage (writes coverage/index.html)
 ```
 
 ## Architecture
