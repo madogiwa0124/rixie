@@ -1,3 +1,8 @@
+[![Gem Version](https://img.shields.io/gem/v/rixie)](https://rubygems.org/gems/rixie)
+[![CI](https://github.com/madogiwa0124/rixie/actions/workflows/main.yml/badge.svg)](https://github.com/madogiwa0124/rixie/actions/workflows/main.yml)
+[![Ruby](https://img.shields.io/badge/ruby-%3E%3D%203.4-CC342D)](https://www.ruby-lang.org)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE.txt)
+
 # Rixie
 
 AI agent orchestration for Ruby.
@@ -7,6 +12,18 @@ AI agent orchestration for Ruby.
 Rixie is a standalone Ruby gem for orchestrating AI agents — no Rails required.
 
 An **Agent** thinks and acts via an LLM and a set of tools, looping until it reaches a final answer. A **Session** manages the full conversation, accumulating history across multiple chats. A **Strategy** controls how a goal is accomplished: the default `Simple` strategy runs a single agent loop, while `PlanExecute` first builds a step-by-step plan and then executes each step in sequence.
+
+> **Status:** Rixie is in its `0.x` series and pre-1.0 — the public API may still change between minor versions. It runs on Ruby 3.4+ and is exercised in CI on Ruby 3.4 and 4.0 with unit tests, integration tests, and a dependency vulnerability audit (`bundler-audit`).
+
+## Why Rixie?
+
+Say you're building a research assistant. In a single conversation, a user might fire off a quick factual question, then ask for a deep multi-step investigation, then want to see exactly how the agent reasoned through one tricky step. Each of those wants a different execution strategy — a single loop, plan-then-execute, an explicit reasoning trace — yet they're all the same conversation, building on the same accumulated context.
+
+Rixie is built for exactly that: **a small, dependency-light orchestration layer that lets you switch reasoning strategy per call within a single, context-carrying session.** Concretely:
+
+- **A pure-Ruby core.** The only runtime dependency is the standard-library [`logger`](https://github.com/ruby/logger); `openai` / `nokogiri` / `cli-ui` are loaded lazily, only for the features you use. No transitive tree to audit, no version conflicts dragged into your `Gemfile`, and no coupling to Rails.
+- **Per-call strategy switching.** Strategy is a `chat` argument, not a pre-wired graph (see [Quick Start](#quick-start)). It lives on the `Task`, not the `Agent`, so the agent stays the same while how it tackles a goal varies turn by turn — with the conversation's context shared automatically.
+- **A small architecture you can read in one sitting.** Five layers, linearly stacked (see [Architecture](#architecture)). No hidden global event bus, no DSL, no metaprogramming — extending Rixie means implementing one plain object (a strategy, an adapter, or a `Tool`).
 
 ## Installation
 
@@ -37,6 +54,38 @@ end
 session = Rixie::Session.new(instructions: "You are a helpful assistant.")
 puts session.chat("What is the capital of France?")
 # => "The capital of France is Paris."
+```
+
+Give the agent tools and it decides when to call them, loops until it has an answer, and carries the result into the rest of the conversation. Both tools below are pure Ruby — no extra gems required:
+
+```ruby
+session = Rixie::Session.new(
+  instructions: "You are a helpful assistant.",
+  tools: [Rixie::Tool::Calculator, Rixie::Tool::CurrentTime]
+)
+
+# The agent calls the calculator tool, then answers from its result.
+puts session.chat("What is 1234 * 5678?")
+# => "1234 × 5678 = 7,006,652."
+
+# The same session still has the previous turn in context.
+puts session.chat("And what year is it right now?")
+# => "It's 2026."
+```
+
+Pick a reasoning strategy per call by passing `strategy:`. The session carries context across them, so you can answer simply, plan a heavier step, or surface an explicit reasoning trace — all in one conversation:
+
+```ruby
+# Default: a single agent loop.
+session.chat("Outline a blog post about Ruby's Ractor.")
+
+# Plan-then-execute: build a step-by-step plan, then run each step.
+session.chat("Now write the full draft.",
+             strategy: Rixie::Strategy::PlanExecute.new)
+
+# ReAct: emit a Thought → Action → Observation trace you can inspect.
+session.chat("Fact-check the draft's performance claims.",
+             strategy: Rixie::Strategy::ReAct.new)
 ```
 
 ## Architecture
