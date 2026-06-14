@@ -74,7 +74,7 @@ class SubscribersLangfuseTest < Minitest::Test
 
   def test_llm_call_start_adds_generation_create
     @listener.emit(Rixie::Event::RunStart.new(user_input: "Hi"))
-    @listener.emit(Rixie::Event::LlmCallStart.new(step_count: 1, model: "gpt-4o", provider: "openai"))
+    @listener.emit(Rixie::Event::LlmCallStart.new(model: "gpt-4o", provider: "openai"))
     flush!
 
     item = @flushed.find { |e| e[:type] == "generation-create" }
@@ -82,12 +82,11 @@ class SubscribersLangfuseTest < Minitest::Test
     assert_equal "llm_call", item.dig(:body, :name)
     assert_equal "gpt-4o", item.dig(:body, :model)
     assert_equal "openai", item.dig(:body, :metadata, :provider)
-    assert_equal 1, item.dig(:body, :metadata, :step)
   end
 
   def test_llm_call_start_links_to_run_span
     @listener.emit(Rixie::Event::RunStart.new(user_input: "Hi"))
-    @listener.emit(Rixie::Event::LlmCallStart.new(step_count: 1, model: "gpt-4o", provider: "openai"))
+    @listener.emit(Rixie::Event::LlmCallStart.new(model: "gpt-4o", provider: "openai"))
     flush!
 
     run_span_id = @flushed.find { |e| e[:type] == "span-create" && e.dig(:body, :name) == "run" }&.dig(:body, :id)
@@ -97,8 +96,8 @@ class SubscribersLangfuseTest < Minitest::Test
 
   def test_llm_call_end_adds_generation_update_with_usage
     @listener.emit(Rixie::Event::RunStart.new(user_input: "Hi"))
-    @listener.emit(Rixie::Event::LlmCallStart.new(step_count: 1, model: "gpt-4o", provider: "openai"))
-    @listener.emit(Rixie::Event::LlmCallEnd.new(step_count: 1, usage: {input_tokens: 100, output_tokens: 50}, finish_reason: "stop"))
+    @listener.emit(Rixie::Event::LlmCallStart.new(model: "gpt-4o", provider: "openai"))
+    @listener.emit(Rixie::Event::LlmCallEnd.new(usage: {input_tokens: 100, output_tokens: 50}, finish_reason: "stop"))
     flush!
 
     item = @flushed.find { |e| e[:type] == "generation-update" }
@@ -110,7 +109,7 @@ class SubscribersLangfuseTest < Minitest::Test
   end
 
   def test_llm_call_end_without_matching_start_is_ignored
-    @listener.emit(Rixie::Event::LlmCallEnd.new(step_count: 99, usage: {input_tokens: 0, output_tokens: 0}, finish_reason: "stop"))
+    @listener.emit(Rixie::Event::LlmCallEnd.new(usage: {input_tokens: 0, output_tokens: 0}, finish_reason: "stop"))
     flush!
 
     assert_empty @flushed.select { |e| e[:type] == "generation-update" }
@@ -278,10 +277,10 @@ class SubscribersLangfuseTest < Minitest::Test
     tc = tool_call
     @listener.emit(Rixie::Event::TaskStart.new(user_input: "Hello", strategy: strategy))
     @listener.emit(Rixie::Event::RunStart.new(user_input: "Hello"))
-    @listener.emit(Rixie::Event::LlmCallStart.new(step_count: 1, model: "gpt-4o", provider: "openai"))
+    @listener.emit(Rixie::Event::LlmCallStart.new(model: "gpt-4o", provider: "openai"))
     @listener.emit(Rixie::Event::ToolCallStart.new(tool_call: tc))
     @listener.emit(Rixie::Event::ToolCallEnd.new(tool_call: tc, result: result))
-    @listener.emit(Rixie::Event::LlmCallEnd.new(step_count: 1, usage: {input_tokens: 10, output_tokens: 5}, finish_reason: "stop"))
+    @listener.emit(Rixie::Event::LlmCallEnd.new(usage: {input_tokens: 10, output_tokens: 5}, finish_reason: "stop"))
     @listener.emit(Rixie::Event::RunEnd.new(output: "result", status: "completed"))
     @listener.emit(Rixie::Event::TaskEnd.new(output: "result", status: "completed"))
   end

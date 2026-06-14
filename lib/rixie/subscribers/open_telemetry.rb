@@ -24,7 +24,7 @@ module Rixie
         tracer = resolve_tracer
         task_span = nil
         run_spans = {}   # run_id => span
-        llm_spans = {}   # [run_id, step_count] => span
+        llm_spans = {}   # run_id => span (one LLM call open per run at a time)
         tool_spans = {}  # tool_call.id => span
 
         listener.on(Event::TaskStart) do |env|
@@ -55,14 +55,13 @@ module Rixie
           run_span = run_spans[env.run_id]
           next unless run_span
           ctx = ::OpenTelemetry::Trace.context_with_span(run_span)
-          llm_spans[[env.run_id, e.step_count]] = tracer.start_span(
+          llm_spans[env.run_id] = tracer.start_span(
             "gen_ai.chat",
             with_parent: ctx,
             attributes: {
               "gen_ai.operation.name" => "chat",
               "gen_ai.system" => e.provider.to_s,
-              "gen_ai.request.model" => e.model.to_s,
-              "rixie.llm.step" => e.step_count
+              "gen_ai.request.model" => e.model.to_s
             },
             kind: :client
           )
@@ -70,7 +69,7 @@ module Rixie
 
         listener.on(Event::LlmCallEnd) do |env|
           e = env.event
-          span = llm_spans.delete([env.run_id, e.step_count])
+          span = llm_spans.delete(env.run_id)
           next unless span
           span.set_attribute("gen_ai.usage.input_tokens", e.usage[:input_tokens]) if e.usage[:input_tokens]
           span.set_attribute("gen_ai.usage.output_tokens", e.usage[:output_tokens]) if e.usage[:output_tokens]

@@ -62,6 +62,30 @@ class SmokeTest < Integration::TestCase
     assert_equal "It is sunny in Tokyo.", output unless live?
   end
 
+  # --- structured output (schema) ---
+
+  def test_structured_output_returns_conforming_hash
+    schema = {
+      "type" => "object",
+      "properties" => {"capital" => {"type" => "string"}},
+      "required" => ["capital"]
+    }
+    client = build_client(responses: [finish_response(content: '{"capital":"Paris"}')])
+    session = Rixie::Session.new(
+      instructions: "Answer with JSON matching the schema. Key: capital (a string).",
+      llm_client: client
+    )
+
+    output = session.chat("What is the capital of France?", schema: schema)
+
+    assert_instance_of Hash, output
+    assert output.key?("capital")
+    assert_kind_of String, output["capital"]
+    refute_empty output["capital"]
+    assert session.tasks.first.completed?
+    assert_equal({"capital" => "Paris"}, output) unless live?
+  end
+
   # --- live streaming ---
 
   def test_live_yields_token_and_finished_events

@@ -2,6 +2,6 @@
 
 module Rixie
   module Event
-    LlmCallStart = Data.define(:step_count, :model, :provider)
+    LlmCallStart = Data.define(:model, :provider)
   end
 end

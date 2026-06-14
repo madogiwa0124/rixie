@@ -28,7 +28,7 @@ module Rixie
         trace_id = SecureRandom.uuid
         batch = []
         run_spans = {}   # run_id  => span_id
-        llm_gens = {}    # step_count => { gen_id:, run_id: }
+        llm_gens = {}    # run_id => gen_id (one LLM call open per run at a time)
         tool_spans = {}  # tool_call.id => span_id
 
         listener.on(Event::TaskStart) do |env|
@@ -59,7 +59,7 @@ module Rixie
         listener.on(Event::LlmCallStart) do |env|
           e = env.event
           gen_id = SecureRandom.uuid
-          llm_gens[e.step_count] = {gen_id: gen_id, run_id: env.run_id}
+          llm_gens[env.run_id] = gen_id
           batch << ingestion_event("generation-create", {
             id: gen_id,
             traceId: trace_id,
@@ -67,16 +67,16 @@ module Rixie
             name: "llm_call",
             startTime: iso8601(env.occurred_at),
             model: e.model,
-            metadata: {provider: e.provider, step: e.step_count}
+            metadata: {provider: e.provider}
           })
         end
 
         listener.on(Event::LlmCallEnd) do |env|
           e = env.event
-          state = llm_gens[e.step_count]
-          next unless state
+          gen_id = llm_gens.delete(env.run_id)
+          next unless gen_id
           batch << ingestion_event("generation-update", {
-            id: state[:gen_id],
+            id: gen_id,
             endTime: iso8601(env.occurred_at),
             usage: {input: e.usage[:input_tokens], output: e.usage[:output_tokens], unit: "TOKENS"},
             metadata: {finish_reason: e.finish_reason}

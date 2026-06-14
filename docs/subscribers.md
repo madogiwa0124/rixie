@@ -253,8 +253,8 @@ All events below are delivered to subscribers via `listener.on(EventClass) { |en
 
 | Event | Fields | Emitted when |
 | --- | --- | --- |
-| `Event::LlmCallStart` | `step_count: Integer`, `model: String \| nil`, `provider: String \| nil` | Before each LLM call inside the think loop |
-| `Event::LlmCallEnd` | `step_count: Integer`, `usage: Hash`, `finish_reason: String \| nil` | After each LLM call returns. `usage` always has `:input_tokens` and `:output_tokens` — the provider's reported values when available, otherwise a character-length estimate (1 token ≈ 4 chars). |
+| `Event::LlmCallStart` | `model: String \| nil`, `provider: String \| nil` | Before each LLM call inside the think loop. Correlate with `LlmCallEnd` via `envelope.run_id` (they strictly alternate per run); use `envelope.sequence_number` for ordering. |
+| `Event::LlmCallEnd` | `usage: Hash`, `finish_reason: String \| nil` | After each LLM call returns. `usage` always has `:input_tokens` and `:output_tokens` — the provider's reported values when available, otherwise a character-length estimate (1 token ≈ 4 chars). |
 | `Event::ThoughtCompleted` | `thought: Agent::Thought` | The LLM returned a `:finish` response — not emitted for tool-call iterations |
 | `Event::Finished` | `content: String \| nil` | Exactly once per `Agent#think` return. `nil` on the `return_direct` exit path. |
 

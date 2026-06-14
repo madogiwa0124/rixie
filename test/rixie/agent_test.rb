@@ -222,9 +222,23 @@ class AgentTest < Minitest::Test
     assert_equal "found", second_call[2].content
   end
 
-  def test_llm_call_is_private
-    agent = make_agent([finish_response])
-    assert_raises(NoMethodError) { agent.llm_call(messages: []) }
+  def test_generate_is_public
+    assert Rixie::Agent.public_method_defined?(:generate)
+  end
+
+  def test_generate_returns_the_llm_response_and_emits_llm_call_events
+    received = []
+    listener.on(Rixie::Event::LlmCallStart) { |envelope| received << envelope.event }
+    listener.on(Rixie::Event::LlmCallEnd) { |envelope| received << envelope.event }
+    agent = make_agent([finish_response(content: "Hi")])
+
+    response = agent.generate(messages: [], listener: listener)
+
+    assert_instance_of Rixie::LLM::Response, response
+    refute response.has_tool_calls?
+    assert_equal "Hi", response.content
+    assert_instance_of Rixie::Event::LlmCallStart, received[0]
+    assert_instance_of Rixie::Event::LlmCallEnd, received[1]
   end
 
   def test_think_raises_response_truncated_error_when_finish_reason_is_length
@@ -475,12 +489,11 @@ class AgentTest < Minitest::Test
     agent.think(messages: [], listener: listener)
 
     assert_equal 1, received.size
-    assert_equal 1, received.first.event.step_count
     assert_equal "gpt-4o", received.first.event.model
     assert_equal "openai", received.first.event.provider
   end
 
-  def test_think_llm_call_start_step_count_increments_across_tool_call_loops
+  def test_think_emits_llm_call_start_for_each_llm_call
     received = []
     listener.on(Rixie::Event::LlmCallStart) { |envelope| received << envelope }
 
@@ -492,8 +505,6 @@ class AgentTest < Minitest::Test
     agent.think(messages: [], listener: listener)
 
     assert_equal 2, received.size
-    assert_equal 1, received[0].event.step_count
-    assert_equal 2, received[1].event.step_count
   end
 
   def test_think_emits_llm_call_end_after_each_llm_call
@@ -505,13 +516,12 @@ class AgentTest < Minitest::Test
 
     assert_equal 1, received.size
     e = received.first.event
-    assert_equal 1, e.step_count
     assert_kind_of Hash, e.usage
     assert e.usage.key?(:input_tokens)
     assert e.usage.key?(:output_tokens)
   end
 
-  def test_think_llm_call_end_step_count_increments_across_tool_call_loops
+  def test_think_emits_llm_call_end_for_each_llm_call
     received = []
     listener.on(Rixie::Event::LlmCallEnd) { |envelope| received << envelope }
 
@@ -523,8 +533,6 @@ class AgentTest < Minitest::Test
     agent.think(messages: [], listener: listener)
 
     assert_equal 2, received.size
-    assert_equal 1, received[0].event.step_count
-    assert_equal 2, received[1].event.step_count
   end
 
   def test_think_llm_call_end_uses_provider_usage_when_present

@@ -100,13 +100,13 @@ class SubscribersOpenTelemetryTest < Minitest::Test
   def emit_full_task(tool_calls: false)
     @listener.emit(Rixie::Event::TaskStart.new(user_input: "Hello", strategy: strategy))
     @listener.emit(Rixie::Event::RunStart.new(user_input: "Hello"))
-    @listener.emit(Rixie::Event::LlmCallStart.new(step_count: 1, model: "gpt-4o", provider: "openai"))
+    @listener.emit(Rixie::Event::LlmCallStart.new(model: "gpt-4o", provider: "openai"))
     if tool_calls
       tc = tool_call
       @listener.emit(Rixie::Event::ToolCallStart.new(tool_call: tc))
       @listener.emit(Rixie::Event::ToolCallEnd.new(tool_call: tc, result: result))
     end
-    @listener.emit(Rixie::Event::LlmCallEnd.new(step_count: 1, usage: {input_tokens: 10, output_tokens: 5}, finish_reason: "stop"))
+    @listener.emit(Rixie::Event::LlmCallEnd.new(usage: {input_tokens: 10, output_tokens: 5}, finish_reason: "stop"))
     @listener.emit(Rixie::Event::RunEnd.new(output: "Done", status: "completed"))
     @listener.emit(Rixie::Event::TaskEnd.new(output: "Done", status: "completed"))
   end
@@ -149,7 +149,6 @@ class SubscribersOpenTelemetryTest < Minitest::Test
     assert llm_span.finished?
     assert_equal "openai", llm_span.attributes["gen_ai.system"]
     assert_equal "gpt-4o", llm_span.attributes["gen_ai.request.model"]
-    assert_equal 1, llm_span.attributes["rixie.llm.step"]
   end
 
   def test_llm_span_receives_usage_on_end

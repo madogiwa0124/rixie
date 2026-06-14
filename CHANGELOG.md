@@ -56,6 +56,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `Event::LlmCallStart` and `Event::LlmCallEnd` no longer carry `step_count`. The field
+  was a redundant sequential counter — subscribers correlate the start/end pair by
+  `envelope.run_id` (the two strictly alternate per run), and the envelope already exposes
+  `sequence_number` for ordering/display. Custom subscribers that read `event.step_count`
+  must switch to `envelope.run_id` / `envelope.sequence_number`.
+- `Rixie::Agent#generate(messages:, listener:, schema:)` is now public: it runs one LLM
+  turn, emits the `LlmCall*` lifecycle events (plus streamed tokens), and returns the raw
+  `LLM::Response` (`Agent#think` interprets it and builds the `Thought` records).
 - `Rixie::CLI` is now a blank-slate framework: `Rixie::CLI.start` no longer registers
   the built-in tools or a default system prompt on its own. The built-in tool set and
   the default prompt (`Rixie::CLI::Instructions::DEFAULT`) are now wired up by the reference

@@ -33,11 +33,11 @@ module Rixie
         }
         listener.on(Event::LlmCallStart) { |envelope|
           e = envelope.event
-          emit(envelope, "llm_call_start", step_count: e.step_count, model: e.model, provider: e.provider)
+          emit(envelope, "llm_call_start", model: e.model, provider: e.provider)
         }
         listener.on(Event::LlmCallEnd) { |envelope|
           e = envelope.event
-          emit(envelope, "llm_call_end", step_count: e.step_count, usage: e.usage, finish_reason: e.finish_reason)
+          emit(envelope, "llm_call_end", usage: e.usage, finish_reason: e.finish_reason)
         }
         listener.on(Event::ToolCallStart) { |envelope|
           tc = envelope.event.tool_call

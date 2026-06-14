@@ -28,11 +28,11 @@ class SubscribersEventSeverityTest < Minitest::Test
   end
 
   def test_llm_call_start_is_debug
-    assert_equal :debug, severity_for(Rixie::Event::LlmCallStart.new(step_count: 1, model: "gpt-4o", provider: "openai"))
+    assert_equal :debug, severity_for(Rixie::Event::LlmCallStart.new(model: "gpt-4o", provider: "openai"))
   end
 
   def test_llm_call_end_is_debug
-    assert_equal :debug, severity_for(Rixie::Event::LlmCallEnd.new(step_count: 1, usage: {input_tokens: 10, output_tokens: 5}, finish_reason: "stop"))
+    assert_equal :debug, severity_for(Rixie::Event::LlmCallEnd.new(usage: {input_tokens: 10, output_tokens: 5}, finish_reason: "stop"))
   end
 
   def test_tool_call_start_is_debug
