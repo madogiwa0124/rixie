@@ -12,18 +12,10 @@ class PlanExecuteTest < Minitest::Test
     {"choices" => [{"message" => {"content" => content, "tool_calls" => nil}}]}
   end
 
-  def plan_done_response(steps: STEPS)
-    {
-      "choices" => [{
-        "message" => {
-          "content" => nil,
-          "tool_calls" => [{
-            "id" => "tc_plan",
-            "function" => {"name" => "plan_done", "arguments" => JSON.generate({"steps" => steps})}
-          }]
-        }
-      }]
-    }
+  # The plan phase uses structured output: the planning turn is a finish whose
+  # content is a JSON object matching Agent::Plan::PLAN_SCHEMA.
+  def plan_response(steps: STEPS)
+    finish_response(content: JSON.generate({"steps" => steps}))
   end
 
   def make_agent(responses)
@@ -38,7 +30,7 @@ class PlanExecuteTest < Minitest::Test
 
   def full_responses(steps: STEPS)
     [
-      plan_done_response(steps: steps),
+      plan_response(steps: steps),
       *steps.each_with_index.map { |_, i| finish_response(content: "Step #{i + 1} done.") }
     ]
   end
@@ -125,12 +117,12 @@ class PlanExecuteTest < Minitest::Test
     task.execute
 
     plan_run = task.runs.first
-    refute_nil plan_run.find_tool_call("plan_done")
+    assert_equal STEPS, plan_run.output["steps"]
   end
 
-  def test_extract_plan_raises_agent_error_when_plan_done_not_found
+  def test_extract_plan_raises_agent_error_when_output_is_not_a_steps_hash
     strategy = Rixie::Strategy::PlanExecute.new
-    # Build a run with no plan_done tool call in its steps
+    # A run whose output is a plain string (no structured plan) must be rejected.
     adapter = Rixie::LLM::Adapter::Dummy.new([finish_response(content: "no plan here")])
     client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
     agent = Rixie::Agent.new(instructions: "s", llm_client: client)

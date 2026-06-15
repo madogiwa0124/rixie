@@ -3,25 +3,12 @@
 require "test_helper"
 
 class PlanTest < Minitest::Test
-  def plan_done_response
-    {
-      "choices" => [{
-        "message" => {
-          "content" => nil,
-          "tool_calls" => [{
-            "id" => "tc_1",
-            "function" => {
-              "name" => "plan_done",
-              "arguments" => '{"steps":[{"title":"Step 1","description":"Do step 1"}]}'
-            }
-          }]
-        }
-      }]
-    }
-  end
-
   def finish_response(content: "Done.")
     {"choices" => [{"message" => {"content" => content, "tool_calls" => nil}}]}
+  end
+
+  def plan_response(steps:)
+    finish_response(content: JSON.generate({"steps" => steps}))
   end
 
   def make_agent(responses = [])
@@ -33,11 +20,11 @@ class PlanTest < Minitest::Test
   def test_instructions_appends_planning_prompt_to_base_agent_instructions
     plan = Rixie::Agent::Plan.new(base_agent: make_agent)
     assert_includes plan.instructions, "You are an assistant."
-    assert_includes plan.instructions, "Make a plan to accomplish the given task."
-    assert_includes plan.instructions, "call plan_done"
+    assert_includes plan.instructions, "ordered list of concrete steps"
+    assert_includes plan.instructions, "\"steps\" array"
   end
 
-  def test_tools_includes_base_agent_tools_plus_plan_done_tool
+  def test_tools_is_empty
     base_tool = Rixie::Tool.new(name: "search", description: "s", input_schema: {}, call: ->(_) {})
     agent = Rixie::Agent.new(
       instructions: "...",
@@ -46,31 +33,36 @@ class PlanTest < Minitest::Test
     )
     plan = Rixie::Agent::Plan.new(base_agent: agent)
 
-    assert_equal 2, plan.tools.size
-    assert_equal "search", plan.tools.first.name
-    assert_equal "plan_done", plan.tools.last.name
+    # Planning exposes no tools — it produces the plan as structured output.
+    assert_empty plan.tools
   end
 
-  def test_think_exits_after_plan_done_and_returns_think_result_with_nil_content
-    agent = make_agent([plan_done_response])
+  def test_instructions_list_base_agent_tools_for_planning
+    base_tool = Rixie::Tool.new(name: "current_time", description: "Returns the current time.", input_schema: {}, call: ->(_) {})
+    agent = Rixie::Agent.new(
+      instructions: "...",
+      tools: [base_tool],
+      llm_client: Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: Rixie::LLM::Adapter::Dummy.new([]))
+    )
     plan = Rixie::Agent::Plan.new(base_agent: agent)
-    listener = Rixie::EventListener.new
-    result = plan.think(messages: [], listener: listener)
+
+    assert_includes plan.instructions, "- current_time: Returns the current time."
+  end
+
+  def test_plan_schema_requires_a_steps_array
+    schema = Rixie::Agent::Plan::PLAN_SCHEMA
+    assert_equal "object", schema["type"]
+    assert_equal ["steps"], schema["required"]
+    assert_equal "array", schema.dig("properties", "steps", "type")
+  end
+
+  def test_think_returns_the_plan_as_a_parsed_hash
+    steps = [{"title" => "Step 1", "description" => "Do step 1"}]
+    plan = Rixie::Agent::Plan.new(base_agent: make_agent([plan_response(steps: steps)]))
+    result = plan.think(messages: [], listener: Rixie::EventListener.new)
+
     assert_instance_of Rixie::Agent::ThinkResult, result
-    assert_nil result.content
-    assert_equal 1, result.thoughts.size
-    assert result.thoughts.first.tool_call?
-  end
-
-  def test_think_emits_tool_calls_completed_for_plan_done_tool_call
-    agent = make_agent([plan_done_response])
-    plan = Rixie::Agent::Plan.new(base_agent: agent)
-    listener = Rixie::EventListener.new
-    received = []
-    listener.on(Rixie::Event::ToolCallsCompleted) { |envelope| received << envelope }
-    plan.think(messages: [], listener: listener)
-    assert_equal 1, received.size
-    assert_equal "plan_done", received.first.event.tool_calls.first.name
+    assert_equal({"steps" => steps}, result.content)
   end
 
   def test_internal_agent_inherits_base_agent_settings
@@ -79,21 +71,11 @@ class PlanTest < Minitest::Test
     client = Rixie::LLM::Client.new(model: "gpt-4o", provider: "openai", adapter: adapter)
     agent = Rixie::Agent.new(
       instructions: "...", llm_client: client,
-      max_steps: 3, parallel_tool_calls: true, token_counter: counter
+      max_steps: 3, token_counter: counter
     )
     internal = Rixie::Agent::Plan.new(base_agent: agent).send(:internal_agent)
 
     assert_equal 3, internal.max_steps
-    assert internal.parallel_tool_calls
     assert_same counter, internal.token_counter
-  end
-
-  def test_plan_done_tool_name_is_plan_done
-    assert_equal "plan_done", Rixie::Agent::Plan::PLAN_DONE_TOOL.name
-  end
-
-  def test_plan_done_tool_call_returns_planning_complete
-    result = Rixie::Agent::Plan::PLAN_DONE_TOOL.call({"steps" => []})
-    assert_equal "Planning complete.", result
   end
 end

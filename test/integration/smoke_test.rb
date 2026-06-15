@@ -111,7 +111,7 @@ class SmokeTest < Integration::TestCase
 
   def test_plan_execute_produces_output
     client = build_client(responses: [
-      plan_done_response(steps: [
+      plan_response(steps: [
         {"title" => "Step 1", "description" => "Do the first thing."},
         {"title" => "Step 2", "description" => "Do the second thing."}
       ]),

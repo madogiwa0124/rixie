@@ -50,11 +50,12 @@ finish_response(content: "Done.")
 tool_call_response(id: "c1", name: "get_weather", arguments: {"city" => "Tokyo"})
 # → {"choices" => [{"message" => {"content" => nil, "tool_calls" => [...]}}]}
 
-plan_done_response(steps: [{"title" => "Step 1", "description" => "..."}])
-# → tool_call_response wrapping a plan_done tool call
+plan_response(steps: [{"title" => "Step 1", "description" => "..."}])
+# → finish_response whose content is JSON matching Agent::Plan::PLAN_SCHEMA
+#   (the plan phase produces the plan via structured output, not a tool call)
 ```
 
-For `Strategy::PlanExecute`, enqueue: `[plan_done_response, *per_step_finish_responses]`.
+For `Strategy::PlanExecute`, enqueue: `[plan_response, *per_step_finish_responses]`.
 
 ## Resetting Global State
 
@@ -68,7 +69,7 @@ Never rely on global config state left over from a previous test. If a test need
 
 ```ruby
 class MyTest < Integration::TestCase
-  # Inherits: build_client, finish_response, tool_call_response, plan_done_response, live?
+  # Inherits: build_client, finish_response, tool_call_response, plan_response, live?
 end
 ```
 

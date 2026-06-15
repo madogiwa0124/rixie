@@ -82,18 +82,10 @@ module Integration
       end
     end
 
-    def plan_done_response(steps:)
-      {
-        "choices" => [{
-          "message" => {
-            "content" => nil,
-            "tool_calls" => [{
-              "id" => "tc_plan",
-              "function" => {"name" => "plan_done", "arguments" => JSON.generate({"steps" => steps})}
-            }]
-          }
-        }]
-      }
+    # The plan phase uses structured output, so the planning LLM turn is a normal
+    # finish whose content is a JSON object matching `Agent::Plan::PLAN_SCHEMA`.
+    def plan_response(steps:)
+      finish_response(content: JSON.generate({"steps" => steps}))
     end
   end
 

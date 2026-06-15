@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "json"
 require "time"
 require_relative "terminal"
 require_relative "spinner"
@@ -103,7 +104,10 @@ module Rixie
         $stdout.flush
       end
 
-      def render_markdown(text)
+      def render_markdown(content)
+        # Structured output (and the PlanExecute plan phase) surfaces a Hash as the
+        # finished content; render it as pretty JSON rather than crashing on String ops.
+        text = content.is_a?(String) ? content : JSON.pretty_generate(content)
         puts Markdown.render(text, terminal: @terminal)
       end
 

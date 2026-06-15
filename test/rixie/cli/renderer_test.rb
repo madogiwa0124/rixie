@@ -94,4 +94,17 @@ class CliRendererTest < Minitest::Test
     out, _err = capture_io { @renderer.saved_sessions([make_row(session_id: "s1", updated_at: "not-a-time")]) }
     assert_match(/s1 \(2 entries\) — hello world/, out)
   end
+
+  # -- render_markdown --
+
+  def test_render_markdown_with_string_content
+    out, _err = capture_io { @renderer.render_markdown("hello") }
+    assert_match(/hello/, out)
+  end
+
+  def test_render_markdown_with_hash_content_renders_json
+    out, _err = capture_io { @renderer.render_markdown({"capital" => "Paris"}) }
+    assert_match(/capital/, out)
+    assert_match(/Paris/, out)
+  end
 end

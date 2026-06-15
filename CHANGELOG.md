@@ -72,6 +72,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `Strategy::PlanExecute` now produces the plan via **structured output** instead of a
+  `plan_done` tool call. `Agent::Plan` runs with no tools and a JSON-schema-constrained
+  response (`Agent::Plan::PLAN_SCHEMA`), so the plan comes back as a Hash. The old
+  tool-call approach was unreliable on smaller models — they would either *execute* the
+  task during planning (calling `web_search`, `fetch`, …) or reply in prose, never calling
+  `plan_done`, raising `plan_done tool call not found`. The `plan_done` tool is removed.
+- `CLI::Renderer#render_markdown` no longer crashes (`undefined method 'split' for Hash`)
+  when the finished content is a Hash (structured output / the PlanExecute plan phase under
+  streaming) — non-String content is rendered as pretty JSON.
 - `Agent::Plan`, `Agent::ReAct`, and `Agent::Compressor` silently dropped the base
   agent's `max_steps`, `token_counter`, and (for `Plan`) `parallel_tool_calls`,
   resetting them to defaults. A user-configured step budget now applies to every

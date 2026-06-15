@@ -44,21 +44,15 @@ module Rixie
         end
       end
 
+      # The plan run uses `Agent::Plan`, which produces the plan as structured
+      # output — so `run.output` is a Hash matching `Agent::Plan::PLAN_SCHEMA`.
       def extract_plan(run)
-        plan_call = run.find_tool_call("plan_done")
+        raw_steps = run.output.is_a?(Hash) ? run.output["steps"] : nil
 
-        raise AgentError, "plan_done tool call not found in run steps" if plan_call.nil?
+        raise AgentError, "planning did not return a steps array" unless raw_steps.is_a?(Array)
 
-        raw_steps = plan_call.arguments[:steps] || plan_call.arguments["steps"]
-        if raw_steps.is_a?(String)
-          begin
-            raw_steps = JSON.parse(raw_steps)
-          rescue JSON::ParserError => e
-            raise AgentError, "plan_done returned invalid JSON for steps: #{e.message}"
-          end
-        end
         steps = raw_steps.map do |s|
-          {title: s[:title] || s["title"], description: s[:description] || s["description"]}
+          {title: s["title"], description: s["description"]}
         end
 
         Plan.new(steps: steps)

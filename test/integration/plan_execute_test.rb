@@ -6,8 +6,8 @@ require_relative "test_helper"
 # Verifies that planning, plan extraction, context injection per step,
 # and multi-run orchestration work correctly end-to-end.
 #
-# Note: live mode requires the LLM to call plan_done with a valid steps schema.
-# Use a model that reliably follows tool-call instructions.
+# Note: live mode requires the LLM to return a plan as structured output
+# (a JSON object matching Agent::Plan::PLAN_SCHEMA).
 class PlanExecuteTest < Integration::TestCase
   STEPS = [
     {"title" => "Research", "description" => "Gather information on the topic."},
@@ -16,7 +16,7 @@ class PlanExecuteTest < Integration::TestCase
 
   def responses_for_full_flow
     [
-      plan_done_response(steps: STEPS),               # plan phase: plan_done tool call
+      plan_response(steps: STEPS),               # plan phase: structured-output plan
       finish_response(content: "Research complete."),  # execute step 1
       finish_response(content: "Summary written.")     # execute step 2
     ]
