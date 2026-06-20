@@ -101,6 +101,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `max_tokens:` parameter on `Session` / `LLM::Client` and `config.default_max_tokens` —
   use `provider_params: { max_tokens: N }` (or `max_completion_tokens:` for models that require it) instead.
+- `Rixie::Run#find_tool_call` — dead since `Strategy::PlanExecute` moved to structured-output
+  planning; it only existed to read the now-removed `plan_done` tool call.
 
 ## [0.1.0] - 2026-05-29
 

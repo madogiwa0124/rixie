@@ -50,10 +50,6 @@ module Rixie
       @status == "failed"
     end
 
-    def find_tool_call(name)
-      thoughts.select(&:tool_call?).flat_map(&:tool_calls).find { it.name == name }
-    end
-
     def to_history
       Context::History.new(input: user_input, thoughts: thoughts, output: output)
     end

@@ -128,47 +128,6 @@ class RunTest < Minitest::Test
     assert_equal "search", received.first.event.tool_calls.first.name
   end
 
-  def test_find_tool_call_returns_matching_tool_call
-    tool = Rixie::Tool.new(name: "plan_done", description: "d", input_schema: {}, call: ->(_) { "ok" })
-    agent = make_agent(
-      [tool_call_response(id: "c1", name: "plan_done"), finish_response],
-      tools: [tool]
-    )
-    run = make_run(agent)
-    run.execute(listener: listener)
-    found = run.find_tool_call("plan_done")
-    assert_equal "plan_done", found.name
-  end
-
-  def test_find_tool_call_returns_nil_when_not_found
-    tool = Rixie::Tool.new(name: "other", description: "d", input_schema: {}, call: ->(_) { "ok" })
-    agent = make_agent(
-      [tool_call_response(id: "c1", name: "other"), finish_response],
-      tools: [tool]
-    )
-    run = make_run(agent)
-    run.execute(listener: listener)
-    assert_nil run.find_tool_call("plan_done")
-  end
-
-  def test_find_tool_call_searches_across_multiple_thoughts
-    search_tool = Rixie::Tool.new(name: "search", description: "d", input_schema: {}, call: ->(_) { "r1" })
-    plan_tool = Rixie::Tool.new(name: "plan_done", description: "d", input_schema: {}, call: ->(_) { "r2" })
-    agent = make_agent(
-      [
-        tool_call_response(id: "c1", name: "search"),
-        tool_call_response(id: "c2", name: "plan_done"),
-        finish_response
-      ],
-      tools: [search_tool, plan_tool]
-    )
-    run = make_run(agent)
-    run.execute(listener: listener)
-    found = run.find_tool_call("plan_done")
-    assert_equal "plan_done", found.name
-    assert_equal "c2", found.id
-  end
-
   def test_execute_emits_run_start_at_beginning
     received = []
     listener.on(Rixie::Event::RunStart) { |envelope| received << envelope }
