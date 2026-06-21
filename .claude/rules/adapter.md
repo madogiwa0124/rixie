@@ -53,6 +53,10 @@ def encode_messages(messages)
 end
 ```
 
+### Multimodal user content
+
+`Message::User#content` is `String | Array<Hash>`. A `String` is plain text. An `Array` carries Rixie unified content blocks — `{ type: "text", text: }` and `{ type: "image", source: { type: "base64", media_type:, data: } }` — and the adapter is responsible for translating each block to the provider's wire format (e.g. OpenAI encodes an image as `{ type: "image_url", image_url: { url: "data:#{media_type};base64,#{data}" } }`). Accept both symbol and string keys, since blocks round-trip through JSON-backed stores. Reject malformed input with `Rixie::InvalidContentError` (a terminal caller-input error, **not** `LLM::Error` which signals a possibly-transient provider failure): an unknown block `type:`, a non-Hash block, or an image block whose `source` is not a complete base64 source (`{type:"base64", media_type:, data:}`) — never emit a degenerate `data:;base64,` URI. Other message types always carry `String` content.
+
 ### Tools
 
 Adapters receive `Tool` objects and encode them to their provider's format. Do not call `Tool#to_definition` — it does not exist. Use `tool.name`, `tool.description`, `tool.input_schema` directly:

@@ -9,6 +9,8 @@ CLI                          # REPL loop, option parsing, session lifecycle
 │   ├── Spinner              # Spinner thread; owned by Renderer
 │   └── Markdown             # Pure function: markdown text → styled text via Terminal
 ├── SessionPicker            # -r resume picker; lists saved sessions and reads the choice
+├── ImageInput               # Pure parser: input line → String | Array<content blocks> (@path → image)
+├── PathCompletion           # Pure: Tab completion for @path tokens (dirs + image files)
 ├── Tracing                  # Facade over tracing backends; one class per backend
 │   ├── Tracing::Langfuse    # --langfuse option, LANGFUSE_* env vars
 │   └── Tracing::Otel        # --otel options, OTLP endpoint + Basic auth
@@ -23,7 +25,7 @@ Do not reintroduce default tools or a default prompt inside `cli.rb`. New built-
 
 ## Responsibility Boundaries
 
-- **Input is CLI's responsibility.** `CLI` owns the `Reline.readline` loop. No other class reads from stdin or prompts the user, with one exception: `SessionPicker` prompts during the `-r` startup flow, before the REPL begins. It is constructed and invoked only by `CLI`; Commands and Renderer must never read input.
+- **Input is CLI's responsibility.** `CLI` owns the `Reline.readline` loop. No other class reads from stdin or prompts the user, with one exception: `SessionPicker` prompts during the `-r` startup flow, before the REPL begins. It is constructed and invoked only by `CLI`; Commands and Renderer must never read input. `ImageInput` and `PathCompletion` are not exceptions to this: they do not read stdin. `ImageInput` is a pure function that transforms the line `CLI` already read (`@path` tokens → image content blocks), loading referenced image files from disk; `PathCompletion` is a pure function that turns the in-progress line into Tab-completion candidates. Both only read the filesystem to resolve `@path` tokens. Like the slash-command completions, `PathCompletion.complete` returns full-line replacement candidates (the completion proc runs with `completer_word_break_characters = ""`).
 - **Output is Renderer's responsibility.** All `puts` / `print` calls go through `Renderer`. Commands, CLI, and Spinner never output directly.
 - **Commands own behavior only.** A command reads its argument from `arg` and delegates display to `@renderer`. If an argument is missing, it shows current state and available options so the user can retry.
 

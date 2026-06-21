@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Multimodal image input: `user_input` passed to `Session#chat` / `Session#live` may now be an
+  `Array` of Rixie unified content blocks (`{ type: "text", text: }` and
+  `{ type: "image", source: { type: "base64", media_type:, data: } }`) in addition to a plain
+  `String`. Adapters translate the unified format to each provider's wire format — the OpenAI
+  adapter encodes images as a `data:` URI under `image_url`. Reading and base64-encoding image
+  files is the caller's responsibility; only base64 image sources are supported (URLs / PDFs /
+  audio are out of scope). Malformed input raises `Rixie::InvalidContentError`: an unknown content
+  block `type:`, a non-Hash block, or an image block whose `source` is not a complete base64 source.
+  Passing a `String` is completely unchanged.
+- `Rixie::InvalidContentError` (under `Rixie::Error`, sibling of `LLM::Error`) — raised for malformed
+  caller-supplied message content. A terminal input error, deliberately not a `LLM::Error` (which
+  signals a possibly-transient provider failure), so callers can distinguish the two.
+- CLI image input: include an `@<path>` token (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) in a
+  message to attach an image — the CLI reads and base64-encodes the file and sends it with your
+  text to a vision-capable model. A `@<path>` that does not resolve to a readable image file is
+  left as literal text. Parsing lives in `Rixie::CLI::ImageInput`. Tab completion after `@`
+  (directories and image files, via `Rixie::CLI::PathCompletion`) helps locate the file.
 - Structured output: `Session#chat(user_input, schema: <JSON Schema Hash>)` returns a parsed
   Ruby `Hash` conforming to the supplied JSON Schema instead of a `String`. The schema is applied
   only to the final answer, so multi-step tool-calling flows (e.g. web search then a structured

@@ -9,6 +9,12 @@ module Rixie
 
   class NotImplementedError < Error; end
 
+  # Raised when caller-supplied message content is malformed (unknown content
+  # block type, non-Hash block, or an incomplete image source). This is a
+  # terminal input error — distinct from LLM::Error, which signals a provider/LLM
+  # failure that may be transient.
+  class InvalidContentError < Error; end
+
   class AgentError < Error; end
   class MaxStepsExceededError < AgentError; end
   class ToolNotFoundError < AgentError; end

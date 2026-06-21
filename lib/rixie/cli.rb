@@ -5,6 +5,8 @@
 require "reline"
 require "optparse"
 require_relative "cli/instructions"
+require_relative "cli/image_input"
+require_relative "cli/path_completion"
 require_relative "cli/terminal"
 require_relative "cli/renderer"
 require_relative "cli/session_picker"
@@ -208,7 +210,7 @@ module Rixie
             slash_names.select { |c| c.start_with?(input) }
           end
         else
-          []
+          PathCompletion.complete(input)
         end
       }
     end
@@ -261,12 +263,13 @@ module Rixie
     end
 
     def handle_input(input)
+      content = ImageInput.parse(input)
       renderer.print_agent_prefix
       tool_section_started = false
       buffer = +""
       renderer.start_spinner
 
-      session.live(input, strategy: current_strategy).each do |envelope|
+      session.live(content, strategy: current_strategy).each do |envelope|
         case envelope.event
         in Rixie::Event::Token[delta:]
           buffer << delta

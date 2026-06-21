@@ -95,6 +95,16 @@ class MemoryStoreTest < Minitest::Test
     assert_equal "Previous conversation summary:\nrecap", loaded.first.to_message.first.content
   end
 
+  def test_load_round_trips_array_input
+    content = [
+      {type: "text", text: "What's in this image?"},
+      {type: "image", source: {type: "base64", media_type: "image/png", data: "ENC"}}
+    ]
+    store.save("s_img", [make_history(input: content, output: "A cat.")])
+    loaded = store.load("s_img")
+    assert_equal content, loaded.first.to_message.first.content
+  end
+
   def test_list_sessions_returns_rows_with_expected_shape
     store.save("s11", [make_history(input: "hello", output: "world")])
 

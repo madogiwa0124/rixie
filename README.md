@@ -92,6 +92,20 @@ session.chat("Fact-check the draft's performance claims.",
              strategy: Rixie::Strategy::ReAct.new)
 ```
 
+Send images to a vision-capable model by passing an array of content blocks instead of a string. Rixie defines a provider-agnostic content format; the adapter translates it to the provider's wire format, so the same input works across providers. Reading and base64-encoding the file is your responsibility:
+
+```ruby
+require "base64"
+image_data = Base64.strict_encode64(File.read("photo.png"))
+
+session.chat([
+  { type: "text",  text: "What's in this image?" },
+  { type: "image", source: { type: "base64", media_type: "image/png", data: image_data } }
+])
+```
+
+Passing a plain `String` (the common case) is unchanged. Only base64-encoded images are supported today — image URLs, PDFs, and audio/video are not.
+
 ## Architecture
 
 ```

@@ -85,6 +85,21 @@ Type `/` during a session to run a command. Tab completion is available for all 
 
 Type `exit` or press `Ctrl+C` to quit.
 
+## Image input
+
+Attach an image to a message by including an `@<path>` token that points at an image file. The CLI reads and base64-encodes the file and sends it alongside your text to the model (which must be vision-capable):
+
+```text
+> What's in this image? @./screenshot.png
+> @~/photos/a.jpg @~/photos/b.png compare these two
+```
+
+- Supported extensions: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`.
+- Multiple images per message are allowed; the surrounding text becomes the message's text.
+- A `@<path>` token that does not resolve to a readable image file is left as literal text, so stray `@` characters are never dropped.
+- Paths must not contain spaces (tokens are whitespace-separated).
+- **Tab completion** is available after `@`: press Tab to complete directories and image files. Directories complete with a trailing `/` so a second Tab descends into them; only image files (by extension) and directories are offered.
+
 ## Resume previous CLI sessions
 
 The CLI persists session context using `Rixie::Store::File` (path: `~/.rixie/sessions.json`) when `config.store` is not set.

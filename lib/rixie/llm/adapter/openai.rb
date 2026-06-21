@@ -75,7 +75,7 @@ module Rixie
           when Rixie::Message::System
             {role: "system", content: msg.content}
           when Rixie::Message::User
-            {role: "user", content: msg.content}
+            {role: "user", content: encode_user_content(msg.content)}
           when Rixie::Message::Assistant
             h = {role: "assistant", content: msg.content}
             h[:tool_calls] = msg.tool_calls.map(&:to_openai_wire) unless msg.tool_calls.empty?
@@ -83,6 +83,55 @@ module Rixie
           when Rixie::Message::Tool
             {role: "tool", tool_call_id: msg.tool_call_id, content: msg.content}
           end
+        end
+
+        # A user message's content is either a plain String (unchanged behavior)
+        # or an Array of Rixie unified content blocks, which are translated here to
+        # OpenAI's wire format. Keys may be symbols (caller-supplied) or strings
+        # (round-tripped through JSON-backed session stores), so both are accepted.
+        def encode_user_content(content)
+          return content unless content.is_a?(Array)
+
+          content.map { |block| encode_content_block(block) }
+        end
+
+        def encode_content_block(block)
+          unless block.is_a?(Hash)
+            raise Rixie::InvalidContentError, "Invalid content block: expected a Hash, got #{block.inspect}."
+          end
+
+          case fetch_key(block, :type).to_s
+          when "text"
+            {type: "text", text: fetch_key(block, :text)}
+          when "image"
+            {type: "image_url", image_url: {url: encode_image_data_uri(fetch_key(block, :source))}}
+          else
+            raise Rixie::InvalidContentError,
+              "Unknown content block type: #{fetch_key(block, :type).inspect}. Expected \"text\" or \"image\"."
+          end
+        end
+
+        # Only base64 image sources are supported. Reject anything else (missing
+        # fields, or the out-of-scope `source.type: "url"` form) with a clear
+        # error instead of emitting a malformed `data:;base64,` URI.
+        def encode_image_data_uri(source)
+          source = {} if source.nil?
+          unless source.is_a?(Hash)
+            raise Rixie::InvalidContentError, "Invalid image source: expected a Hash, got #{source.inspect}."
+          end
+
+          media_type = fetch_key(source, :media_type).to_s
+          data = fetch_key(source, :data).to_s
+          unless fetch_key(source, :type).to_s == "base64" && !media_type.empty? && !data.empty?
+            raise Rixie::InvalidContentError,
+              "Invalid image content block: expected source { type: \"base64\", media_type:, data: }, got #{source.inspect}."
+          end
+
+          "data:#{media_type};base64,#{data}"
+        end
+
+        def fetch_key(hash, key)
+          hash[key] || hash[key.to_s]
         end
 
         def build_stream_raw(content, accumulated_tool_calls, finish_reason)

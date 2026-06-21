@@ -25,6 +25,16 @@ class PromptBuilderTest < Minitest::Test
     assert_equal "hi", messages.last.content
   end
 
+  def test_array_user_input_passes_through_unchanged
+    content = [
+      {type: "text", text: "What's in this image?"},
+      {type: "image", source: {type: "base64", media_type: "image/png", data: "ENC"}}
+    ]
+    messages = builder.build(user_input: content, instructions: "sys", context: [])
+    assert_instance_of Rixie::Message::User, messages.last
+    assert_equal content, messages.last.content
+  end
+
   def test_builds_messages_in_correct_order
     ctx = fake_context_entry([
       Rixie::Message::User.new(content: "prev"),

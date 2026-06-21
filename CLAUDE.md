@@ -102,6 +102,9 @@ The existing tool loop in `Agent#think` is already iterative; what classic ReAct
 - `cli-ui` — eager require at the top of `CLI::Terminal`; loaded only via `bin/rixie`, so a user requiring `rixie/cli` is intentionally opting in.
 - `nokogiri` — **lazy** require inside `Tool::Fetch`'s `call:` lambda and `Search::DuckDuckGo#search`, because both files are eagerly loaded from `lib/rixie.rb`. The gem must load without nokogiri; only invocation fails.
 
+**Multimodal `user_input` uses a Rixie unified content format, translated in the adapter.**
+`user_input` (to `Session#chat` / `Session#live`) is `String | Array<Hash>`. A `String` is plain text (unchanged). An `Array` carries Rixie unified content blocks — `{ type: "text", text: }` and `{ type: "image", source: { type: "base64", media_type:, data: } }` — which flow unchanged through `Session → Task → Run → PromptBuilder` and into `Message::User#content` (whose type widens from `String` to `String | Array<Hash>`). Only the **adapter** understands the format: `OpenAI#encode_message` translates an Array `content` to OpenAI's wire format (text passthrough; image → `image_url` with a `data:` URI), accepting both symbol and string keys so blocks round-trip through JSON-backed stores. Malformed content blocks (unknown `type:`, a non-Hash block, or an image block whose `source` is not a complete base64 source) raise `Rixie::InvalidContentError` (a terminal caller-input error, not `LLM::Error`). Passing each provider's *native* content format directly through was rejected: it would make `user_input` provider-specific, breaking the provider-independence that the `model:`/`provider:` separation exists to preserve. Consistent with `Tool#input_schema`, no value objects / resolver / DSL are introduced — `user_input` stays plain data. Scope is base64 images only; image URLs, PDFs, and audio/video are out of scope.
+
 Tool-related design decisions (`.with` factory pattern, `FileSandbox` centralization, Calculator parser choice) are documented in [`.claude/rules/tool.md`](.claude/rules/tool.md).
 
 ## Error Classes
@@ -112,6 +115,7 @@ Rixie::Error                      # base
   │    ├─ NoProviderError
   │    └─ UnknownProviderError
   ├─ Rixie::NotImplementedError     # raised by abstract Base classes (Search, Store, Subscriber)
+  ├─ Rixie::InvalidContentError     # malformed caller message content (bad content block); terminal, not LLM::Error
   ├─ Rixie::AgentError
   │    ├─ MaxStepsExceededError
   │    ├─ ToolNotFoundError

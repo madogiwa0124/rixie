@@ -89,6 +89,35 @@ class HistoryTest < Minitest::Test
     assert_equal 2, messages.size
   end
 
+  def test_to_message_passes_array_input_through_to_user_message
+    content = [
+      {type: "text", text: "Describe this."},
+      {type: "image", source: {type: "base64", media_type: "image/png", data: "ENC"}}
+    ]
+    history = Rixie::Context::History.new(input: content, thoughts: [], output: "ok")
+    messages = history.to_message
+    assert_instance_of Rixie::Message::User, messages[0]
+    assert_equal content, messages[0].content
+  end
+
+  def test_array_input_round_trips_through_to_store_and_from_store
+    content = [
+      {type: "text", text: "Describe this."},
+      {type: "image", source: {type: "base64", media_type: "image/png", data: "ENC"}}
+    ]
+    history = Rixie::Context::History.new(input: content, thoughts: [], output: "ok")
+
+    # Simulate a JSON-backed store: serialize and parse back (keys become Strings).
+    stored = JSON.parse(JSON.generate(history.to_store))
+    restored = Rixie::Context::History.from_store(stored)
+
+    expected = [
+      {"type" => "text", "text" => "Describe this."},
+      {"type" => "image", "source" => {"type" => "base64", "media_type" => "image/png", "data" => "ENC"}}
+    ]
+    assert_equal expected, restored.to_message.first.content
+  end
+
   def test_to_message_omits_assistant_message_when_output_is_nil
     # return_direct path: the run ends without a final LLM text response
     history = Rixie::Context::History.new(input: "q", thoughts: [], output: nil)

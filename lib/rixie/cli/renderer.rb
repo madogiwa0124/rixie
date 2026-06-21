@@ -48,6 +48,7 @@ module Rixie
           info("Provider", provider)
           info("Model", model)
           tracing_endpoints.each { |label, endpoint| info(label, endpoint) }
+          text("Attach an image with #{@terminal.warn("@path/to/image.png")} in your message.")
           text("Type #{@terminal.warn("exit")} or press #{@terminal.warn("Ctrl+C")} to quit.")
         end
       end
