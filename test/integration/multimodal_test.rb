@@ -76,8 +76,9 @@ class MultimodalTest < Integration::TestCase
     content = image_content
     session.chat(content)
 
+    # Session#chat normalizes input to canonical (string-keyed) content blocks.
     user_msg = adapter.calls.last.find { |m| m.is_a?(Rixie::Message::User) }
-    assert_equal content, user_msg.content
+    assert_equal Rixie::Input.normalize(content), user_msg.content
   end
 
   def test_image_content_is_recorded_in_session_context
@@ -90,7 +91,7 @@ class MultimodalTest < Integration::TestCase
     history = session.context.first
     assert_instance_of Rixie::Context::History, history
     user_msg = history.to_message.find { |m| m.is_a?(Rixie::Message::User) }
-    assert_equal content, user_msg.content
+    assert_equal Rixie::Input.normalize(content), user_msg.content
   end
 
   def test_image_content_is_replayed_on_later_turns
@@ -101,8 +102,9 @@ class MultimodalTest < Integration::TestCase
     session.chat(content)
     session.chat("And now?")
 
-    # The second turn's prompt must still carry the first turn's image content.
+    # The second turn's prompt must still carry the first turn's image content
+    # (in canonical, string-keyed form).
     replayed = adapter.calls.last.select { |m| m.is_a?(Rixie::Message::User) }.map(&:content)
-    assert_includes replayed, content
+    assert_includes replayed, Rixie::Input.normalize(content)
   end
 end

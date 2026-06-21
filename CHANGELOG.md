@@ -12,12 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multimodal image input: `user_input` passed to `Session#chat` / `Session#live` may now be an
   `Array` of Rixie unified content blocks (`{ type: "text", text: }` and
   `{ type: "image", source: { type: "base64", media_type:, data: } }`) in addition to a plain
-  `String`. Adapters translate the unified format to each provider's wire format — the OpenAI
-  adapter encodes images as a `data:` URI under `image_url`. Reading and base64-encoding image
-  files is the caller's responsibility; only base64 image sources are supported (URLs / PDFs /
-  audio are out of scope). Malformed input raises `Rixie::InvalidContentError`: an unknown content
-  block `type:`, a non-Hash block, or an image block whose `source` is not a complete base64 source.
+  `String`. Input is normalized once at the `Session` boundary by `Rixie::Input.normalize`
+  (validated and canonicalized; symbol or string keys accepted), and adapters then perform pure
+  translation to each provider's wire format — the OpenAI adapter encodes images as a `data:` URI
+  under `image_url`. Reading and base64-encoding image files is the caller's responsibility; only
+  base64 image sources are supported (URLs / PDFs / audio are out of scope). Malformed input raises
+  `Rixie::InvalidContentError`: an unknown content block `type:`, a non-Hash block, a text block
+  without a String `text`, or an image block whose `source` is not a complete base64 source.
   Passing a `String` is completely unchanged.
+- `Rixie::Input` — pure module that normalizes/validates `Session#chat` / `#live` `user_input` at
+  the input boundary (`Input.normalize`). A `String` passes through unchanged; an `Array` of content
+  blocks is validated (text and image blocks uniformly) and canonicalized to string-keyed Hashes so
+  adapters, stores, and context replay all see one representation.
 - `Rixie::InvalidContentError` (under `Rixie::Error`, sibling of `LLM::Error`) — raised for malformed
   caller-supplied message content. A terminal input error, deliberately not a `LLM::Error` (which
   signals a possibly-transient provider failure), so callers can distinguish the two.

@@ -290,6 +290,40 @@ class SessionTest < Minitest::Test
     assert_instance_of Rixie::Context::Summary, saved.first
   end
 
+  # Records the messages of every chat call so a test can inspect the text the
+  # compressor was asked to summarize.
+  class CapturingAdapter
+    attr_reader :calls
+
+    def initialize(responses)
+      @responses = responses.dup
+      @calls = []
+    end
+
+    def chat(messages, tools:, schema: nil)
+      @calls << messages
+      Rixie::LLM::Response.from_openai_wire(@responses.shift)
+    end
+  end
+
+  def test_compress_flattens_multimodal_user_content_to_text
+    adapter = CapturingAdapter.new([finish_response(content: "Turn 1"), finish_response(content: "Summary")])
+    session = Rixie::Session.new(instructions: "Be helpful.", llm_client: Rixie::LLM::Client.new(adapter: adapter))
+    session.chat([
+      {type: "text", text: "What is this?"},
+      {type: "image", source: {type: "base64", media_type: "image/png", data: "QUJD"}}
+    ])
+
+    session.compress!
+
+    # The compressor's prompt (the last chat call) must carry a readable string,
+    # not an inspected Hash — image blocks collapse to a placeholder.
+    summary_prompt = adapter.calls.last.find { |m| m.is_a?(Rixie::Message::User) }.content
+    assert_includes summary_prompt, "[user] What is this? [image]"
+    refute_includes summary_prompt, "=>"
+    refute_includes summary_prompt, "QUJD"
+  end
+
   def test_compress_accepts_custom_compressor
     custom_instructions = "Summarize in one word."
     session = make_session([finish_response(content: "Turn 1"), finish_response(content: "OneWord")])
@@ -379,6 +413,28 @@ class SessionTest < Minitest::Test
     session = Rixie::Session.new(agent: agent)
     error = assert_raises(Rixie::ConfigurationError) { session.live("hi") }
     assert_includes error.message, "stream_client"
+  end
+
+  def test_live_normalizes_invalid_content_eagerly_before_enumeration
+    # The raise must happen on the #live call itself (like the schema /
+    # stream-client guards), not lazily when the Enumerator is first iterated.
+    session = make_session_with_live([], [finish_response(content: "ok")])
+    assert_raises(Rixie::InvalidContentError) do
+      session.live([{type: "image", source: {type: "base64", media_type: "image/png"}}])
+    end
+  end
+
+  def test_live_normalizes_array_content_to_canonical_form
+    session = make_session_with_live([], [finish_response(content: "ok")])
+    content = [
+      {type: "text", text: "What is this?"},
+      {type: "image", source: {type: "base64", media_type: "image/png", data: "QUJD"}}
+    ]
+    session.live(content).to_a
+
+    history = session.context.first
+    user_msg = history.to_message.find { |m| m.is_a?(Rixie::Message::User) }
+    assert_equal Rixie::Input.normalize(content), user_msg.content
   end
 
   def test_live_yields_event_token_events

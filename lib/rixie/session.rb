@@ -74,6 +74,7 @@ module Rixie
     end
 
     def chat(user_input, strategy: Strategy::Simple.new, schema: nil)
+      user_input = Input.normalize(user_input)
       task = Task.new(user_input: user_input, agent: agent, context: context, strategy: strategy, subscribers: @subscribers, session_id: @session_id, schema: schema)
       task.execute
       @tasks << task
@@ -89,6 +90,10 @@ module Rixie
       if @stream_client.nil?
         raise ConfigurationError, "Session#live requires a stream client. Pass `stream_client:` when constructing Session with a pre-built `agent:`."
       end
+
+      # Normalize eagerly so malformed content raises before the Enumerator is
+      # returned, consistent with the schema/stream-client guards above.
+      user_input = Input.normalize(user_input)
 
       Enumerator.new do |yielder|
         stream_agent = @agent.with_llm_client(@stream_client)
@@ -119,7 +124,7 @@ module Rixie
       summary_input = to_compress.flat_map(&:to_message).map { |msg|
         case msg
         when Message::System then "[system] #{msg.content}"
-        when Message::User then "[user] #{msg.content}"
+        when Message::User then "[user] #{render_user_content(msg.content)}"
         when Message::Assistant then "[assistant] #{msg.content}"
         when Message::Tool then "[tool_result id=#{msg.tool_call_id}] #{msg.content}"
         end
@@ -157,6 +162,21 @@ module Rixie
     end
 
     private
+
+    # Multimodal user content is an Array of canonical content blocks; flatten it
+    # to text for the compression summary (text blocks inline, images elided to a
+    # placeholder so the summary stays a readable String).
+    def render_user_content(content)
+      return content unless content.is_a?(Array)
+
+      content.map { |block|
+        case block["type"]
+        when "text" then block["text"]
+        when "image" then "[image]"
+        else "[content]"
+        end
+      }.join(" ")
+    end
 
     def default_log_subscriber
       case Rixie.config.log_format

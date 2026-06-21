@@ -81,12 +81,15 @@ class OpenAIAdapterTest < Minitest::Test
     assert_equal "hello", msg[:content]
   end
 
+  # Content blocks reach the adapter already validated and canonicalized to
+  # string keys by Rixie::Input. The adapter is pure wire translation; block
+  # validation is covered by InputTest, not here.
   def test_chat_encodes_array_user_content_with_text_and_image
     adapter = build_adapter
     get_captured = stub_client(adapter)
     content = [
-      {type: "text", text: "What's in this image?"},
-      {type: "image", source: {type: "base64", media_type: "image/png", data: "QUJD"}}
+      {"type" => "text", "text" => "What's in this image?"},
+      {"type" => "image", "source" => {"type" => "base64", "media_type" => "image/png", "data" => "QUJD"}}
     ]
     adapter.chat([user_msg(content)], tools: [])
     encoded = get_captured.call[:messages].first[:content]
@@ -98,98 +101,38 @@ class OpenAIAdapterTest < Minitest::Test
   def test_chat_encodes_image_only_content
     adapter = build_adapter
     get_captured = stub_client(adapter)
-    content = [{type: "image", source: {type: "base64", media_type: "image/jpeg", data: "ENC"}}]
+    content = [{"type" => "image", "source" => {"type" => "base64", "media_type" => "image/jpeg", "data" => "ENC"}}]
     adapter.chat([user_msg(content)], tools: [])
     encoded = get_captured.call[:messages].first[:content]
     assert_equal 1, encoded.size
     assert_equal "data:image/jpeg;base64,ENC", encoded[0][:image_url][:url]
   end
 
-  def test_chat_encodes_array_content_with_string_keys
-    # Content round-tripped through a JSON-backed store comes back with String keys.
-    adapter = build_adapter
-    get_captured = stub_client(adapter)
-    content = [
-      {"type" => "text", "text" => "hi"},
-      {"type" => "image", "source" => {"type" => "base64", "media_type" => "image/png", "data" => "XYZ"}}
-    ]
-    adapter.chat([user_msg(content)], tools: [])
-    encoded = get_captured.call[:messages].first[:content]
-    assert_equal({type: "text", text: "hi"}, encoded[0])
-    assert_equal "data:image/png;base64,XYZ", encoded[1][:image_url][:url]
-  end
-
-  def test_chat_raises_on_unknown_content_block_type
+  # Defensive guard: a canonicalized block should always be mappable, so an
+  # unmappable type signals an internal-invariant violation (not user input,
+  # which Rixie::Input rejects upstream).
+  def test_chat_raises_on_unmappable_content_block
     adapter = build_adapter
     stub_client(adapter)
-    content = [{type: "audio", data: "..."}]
+    content = [{"type" => "audio", "data" => "..."}]
     error = assert_raises(Rixie::InvalidContentError) do
       adapter.chat([user_msg(content)], tools: [])
     end
-    assert_includes error.message, "Unknown content block type"
+    assert_includes error.message, "Unmappable content block"
   end
 
-  def test_chat_raises_on_non_hash_content_block
+  # Defensive guard for a malformed image source (e.g. a corrupt/old store entry
+  # replayed without re-normalization). Must raise rather than dereference a
+  # non-Hash source and silently emit a degenerate `data:;base64,` URI.
+  def test_chat_raises_on_image_block_with_non_hash_source
     adapter = build_adapter
     stub_client(adapter)
-    error = assert_raises(Rixie::InvalidContentError) do
-      adapter.chat([user_msg(["hello"])], tools: [])
+    [nil, "data:image/png;base64,AAA"].each do |bad_source|
+      error = assert_raises(Rixie::InvalidContentError) do
+        adapter.chat([user_msg([{"type" => "image", "source" => bad_source}])], tools: [])
+      end
+      assert_includes error.message, "Unmappable image source"
     end
-    assert_includes error.message, "expected a Hash"
-  end
-
-  def test_chat_raises_on_image_block_with_non_base64_source
-    adapter = build_adapter
-    stub_client(adapter)
-    content = [{type: "image", source: {type: "url", url: "https://example.com/a.png"}}]
-    error = assert_raises(Rixie::InvalidContentError) do
-      adapter.chat([user_msg(content)], tools: [])
-    end
-    assert_includes error.message, "Invalid image content block"
-  end
-
-  def test_chat_raises_on_image_block_missing_data
-    adapter = build_adapter
-    stub_client(adapter)
-    content = [{type: "image", source: {type: "base64", media_type: "image/png"}}]
-    assert_raises(Rixie::InvalidContentError) do
-      adapter.chat([user_msg(content)], tools: [])
-    end
-  end
-
-  def test_chat_raises_on_non_hash_image_source
-    adapter = build_adapter
-    stub_client(adapter)
-    content = [{type: "image", source: "data:image/png;base64,AAA"}]
-    error = assert_raises(Rixie::InvalidContentError) do
-      adapter.chat([user_msg(content)], tools: [])
-    end
-    assert_includes error.message, "Invalid image source"
-  end
-
-  def test_chat_raises_on_image_block_with_empty_data
-    adapter = build_adapter
-    stub_client(adapter)
-    content = [{type: "image", source: {type: "base64", media_type: "image/png", data: ""}}]
-    assert_raises(Rixie::InvalidContentError) do
-      adapter.chat([user_msg(content)], tools: [])
-    end
-  end
-
-  def test_chat_raises_on_image_block_with_empty_media_type
-    adapter = build_adapter
-    stub_client(adapter)
-    content = [{type: "image", source: {type: "base64", media_type: "", data: "QUJD"}}]
-    assert_raises(Rixie::InvalidContentError) do
-      adapter.chat([user_msg(content)], tools: [])
-    end
-  end
-
-  def test_invalid_content_error_is_a_rixie_error_but_not_llm_error
-    # Terminal caller-input error — must be catchable as Rixie::Error yet
-    # distinguishable from LLM::Error (a possibly-transient provider failure).
-    assert Rixie::InvalidContentError < Rixie::Error
-    refute Rixie::InvalidContentError < Rixie::LLM::Error
   end
 
   def test_chat_does_not_include_temperature_when_nil
