@@ -51,7 +51,7 @@ class CliCommandsModelTest < Minitest::Test
 
   private
 
-  FakeCLI = Struct.new(:current_model, :switched_to, keyword_init: true) do
+  FakeCLI = Struct.new(:current_model, :switched_to) do
     def switch_model(model)
       self.switched_to = model
     end

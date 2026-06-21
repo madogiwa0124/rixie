@@ -93,5 +93,5 @@ class CliCommandsStrategyTest < Minitest::Test
 
   private
 
-  FakeCLI = Struct.new(:strategy_name, keyword_init: true)
+  FakeCLI = Struct.new(:strategy_name)
 end

@@ -44,5 +44,5 @@ class CliCommandsContextTest < Minitest::Test
 
   private
 
-  FakeCLI = Struct.new(:current_context_size, :current_context_length, keyword_init: true)
+  FakeCLI = Struct.new(:current_context_size, :current_context_length)
 end

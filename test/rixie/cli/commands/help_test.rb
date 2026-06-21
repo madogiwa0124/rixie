@@ -28,5 +28,5 @@ class CliCommandsHelpTest < Minitest::Test
 
   private
 
-  FakeCLI = Struct.new(:commands, keyword_init: true)
+  FakeCLI = Struct.new(:commands)
 end
