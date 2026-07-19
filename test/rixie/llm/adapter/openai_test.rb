@@ -7,13 +7,14 @@ require "rixie/llm/adapter/openai"
 class OpenAIAdapterTest < Minitest::Test
   EMPTY_RESULT = Struct.new(:choices).new([])
 
-  def build_adapter(temperature: nil, provider_params: nil)
+  def build_adapter(temperature: nil, provider_params: nil, null_content_fallback: false)
     Rixie::LLM::Adapter::OpenAI.new(
       model: "gpt-4o",
       base_url: "https://api.openai.com/v1",
       api_key: "test",
       temperature: temperature,
-      provider_params: provider_params
+      provider_params: provider_params,
+      null_content_fallback: null_content_fallback
     )
   end
 
@@ -251,6 +252,41 @@ class OpenAIAdapterTest < Minitest::Test
     assert_instance_of Rixie::LLM::Response, response
     assert_equal "Hello there", response.content
     refute response.has_tool_calls?
+  end
+
+  def assistant_msg_with_tool_call
+    tool_call = Rixie::LLM::ToolCall.new(id: "c1", name: "get_weather", arguments: {"city" => "Tokyo"})
+    Rixie::Message::Assistant.new(content: nil, tool_calls: [tool_call])
+  end
+
+  # Per the OpenAI spec, an assistant message with tool_calls legitimately carries
+  # content: null. Default behavior must be unchanged for plain OpenAI/Ollama.
+  def test_chat_sends_null_content_unchanged_by_default
+    adapter = build_adapter
+    get_captured = stub_client(adapter)
+    adapter.chat([assistant_msg_with_tool_call], tools: [])
+    msg = get_captured.call[:messages].first
+    assert_nil msg[:content]
+    assert_equal 1, msg[:tool_calls].size
+  end
+
+  # Opt-in for strict OpenAI-compatible backends (e.g. Cloudflare Workers AI)
+  # that reject content: null alongside tool_calls.
+  def test_chat_replaces_null_content_with_empty_string_when_fallback_enabled
+    adapter = build_adapter(null_content_fallback: true)
+    get_captured = stub_client(adapter)
+    adapter.chat([assistant_msg_with_tool_call], tools: [])
+    msg = get_captured.call[:messages].first
+    assert_equal "", msg[:content]
+    assert_equal 1, msg[:tool_calls].size
+  end
+
+  def test_chat_does_not_replace_non_null_assistant_content_when_fallback_enabled
+    adapter = build_adapter(null_content_fallback: true)
+    get_captured = stub_client(adapter)
+    msg = Rixie::Message::Assistant.new(content: "Hello", tool_calls: [])
+    adapter.chat([msg], tools: [])
+    assert_equal "Hello", get_captured.call[:messages].first[:content]
   end
 
   def test_stream_captures_finish_reason_from_final_chunk

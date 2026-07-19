@@ -57,6 +57,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to pass arbitrary parameters directly to the provider API.
   Use this to supply model-specific parameters such as `max_completion_tokens:` for GPT-5
   or `seed:` for reproducibility.
+- `adapter_options:` on `config.register_provider`, forwarded as extra keyword arguments to the
+  adapter's constructor. `Rixie::LLM::Adapter::OpenAI` gains `null_content_fallback:` (default
+  `false`), which sends `content: ""` instead of `content: null` for an assistant message that
+  carries `tool_calls`. Some strict OpenAI-compatible backends (e.g. Cloudflare Workers AI) reject
+  `content: null` even though it is valid per the OpenAI spec; enabling this per-provider avoids
+  changing default behavior for OpenAI/Ollama and other spec-compliant backends.
 - `session_id:` option on `Session` so a resumed session keeps saving under the same
   store key instead of generating a fresh id (and fragmenting one conversation
   across store entries).

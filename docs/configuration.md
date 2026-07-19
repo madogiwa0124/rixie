@@ -46,6 +46,29 @@ Rixie.configure do |config|
 end
 ```
 
+### Strict OpenAI-compatible backends
+
+Some OpenAI-compatible backends validate the request body more strictly than the OpenAI spec
+requires. For example, Cloudflare Workers AI rejects `content: null` on an assistant message
+that carries `tool_calls`, even though that combination is valid per the OpenAI spec (and is
+what plain OpenAI / Ollama expect to receive unchanged). Opt a specific provider into a
+compatibility fallback with `adapter_options:` instead of changing the adapter's default
+behavior:
+
+```ruby
+Rixie.configure do |config|
+  config.register_provider("cloudflare",
+    adapter:  :openai,
+    base_url: "https://api.cloudflare.com/client/v4/accounts/ACCOUNT_ID/ai/v1",
+    api_key:  ENV["CLOUDFLARE_API_TOKEN"],
+    adapter_options: { null_content_fallback: true }
+  )
+end
+```
+
+`adapter_options:` is a Hash forwarded as extra keyword arguments to the adapter's constructor,
+so it also works with custom adapter classes that accept their own options.
+
 ## Custom adapters
 
 You can plug in any LLM by writing an adapter class and registering it as a provider. An adapter must implement two methods:

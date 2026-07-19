@@ -10,11 +10,12 @@ module Rixie
   module LLM
     module Adapter
       class OpenAI
-        def initialize(model:, base_url:, api_key:, request_timeout: nil, temperature: nil, parallel_tool_calls: true, provider_params: nil)
+        def initialize(model:, base_url:, api_key:, request_timeout: nil, temperature: nil, parallel_tool_calls: true, provider_params: nil, null_content_fallback: false)
           @model = model
           @temperature = temperature
           @parallel_tool_calls = parallel_tool_calls
           @provider_params = provider_params || {}
+          @null_content_fallback = null_content_fallback
           params = {api_key: api_key, base_url: base_url}
           params[:timeout] = request_timeout if request_timeout
           @client = ::OpenAI::Client.new(**params)
@@ -77,7 +78,12 @@ module Rixie
           when Rixie::Message::User
             {role: "user", content: encode_user_content(msg.content)}
           when Rixie::Message::Assistant
-            h = {role: "assistant", content: msg.content}
+            # content: null alongside tool_calls is valid per the OpenAI spec, but some
+            # strict OpenAI-compatible backends (e.g. Cloudflare Workers AI) reject it.
+            # null_content_fallback opts a registered provider into "" instead.
+            content = msg.content
+            content = "" if content.nil? && @null_content_fallback
+            h = {role: "assistant", content: content}
             h[:tool_calls] = msg.tool_calls.map(&:to_openai_wire) unless msg.tool_calls.empty?
             h
           when Rixie::Message::Tool

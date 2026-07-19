@@ -47,8 +47,8 @@ module Rixie
       @custom_providers = {}
     end
 
-    def register_provider(name, adapter:, base_url:, api_key:)
-      @custom_providers[name.to_s] = {adapter: adapter, base_url: base_url, api_key: api_key}
+    def register_provider(name, adapter:, base_url:, api_key:, adapter_options: {})
+      @custom_providers[name.to_s] = {adapter: adapter, base_url: base_url, api_key: api_key, adapter_options: adapter_options}
     end
 
     attr_reader :custom_providers

@@ -37,7 +37,8 @@ module Rixie
             provider_params: provider_params
           }
           params[:parallel_tool_calls] = parallel_tool_calls unless parallel_tool_calls.nil? || !openai_adapter?(adapter_class)
-          adapter_class.new(**params)
+          adapter_options = config[:adapter_options] || {}
+          adapter_class.new(**adapter_options, **params)
         end
 
         # Adapter::OpenAI is loaded lazily; when resolving a custom adapter class

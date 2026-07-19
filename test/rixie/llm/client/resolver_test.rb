@@ -52,6 +52,43 @@ class ResolverTest < Minitest::Test
     end
   end
 
+  def test_threads_adapter_options_into_adapter_construction
+    captured = nil
+    capturing_adapter = Class.new do
+      define_method(:initialize) { |**kwargs| captured = kwargs }
+    end
+    Rixie.configure do |config|
+      config.register_provider("capturing",
+        adapter: capturing_adapter,
+        base_url: "http://localhost",
+        api_key: "test",
+        adapter_options: {null_content_fallback: true})
+    end
+
+    Resolver.resolve(model: "m", provider: "capturing")
+    assert_equal true, captured[:null_content_fallback]
+  end
+
+  # Resolved params (model, base_url, api_key, ...) must win over a conflicting
+  # key accidentally present in adapter_options — adapter_options only adds new
+  # adapter-specific kwargs, it must not be able to override core resolution.
+  def test_resolved_params_take_precedence_over_conflicting_adapter_options
+    captured = nil
+    capturing_adapter = Class.new do
+      define_method(:initialize) { |**kwargs| captured = kwargs }
+    end
+    Rixie.configure do |config|
+      config.register_provider("capturing2",
+        adapter: capturing_adapter,
+        base_url: "http://localhost",
+        api_key: "test",
+        adapter_options: {model: "should-be-overridden"})
+    end
+
+    Resolver.resolve(model: "actual-model", provider: "capturing2")
+    assert_equal "actual-model", captured[:model]
+  end
+
   # Regression: resolving a custom adapter class with parallel_tool_calls set must not
   # reference Adapter::OpenAI when that constant has never been loaded (lazy require).
   def test_custom_adapter_class_resolves_when_openai_adapter_is_not_loaded

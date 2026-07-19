@@ -25,6 +25,20 @@ class ConfigurationTest < Minitest::Test
     assert_equal :openai, provider[:adapter]
     assert_equal "https://my-llm-proxy.internal/v1", provider[:base_url]
     assert_equal "secret", provider[:api_key]
+    assert_equal({}, provider[:adapter_options])
+  end
+
+  def test_register_provider_stores_adapter_options
+    Rixie.configure do |config|
+      config.register_provider("cloudflare",
+        adapter: :openai,
+        base_url: "https://api.cloudflare.com/client/v4/accounts/ACCT/ai/v1",
+        api_key: "secret",
+        adapter_options: {null_content_fallback: true})
+    end
+
+    provider = Rixie.config.custom_providers["cloudflare"]
+    assert_equal({null_content_fallback: true}, provider[:adapter_options])
   end
 
   def test_reset_restores_defaults
