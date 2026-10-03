@@ -56,6 +56,27 @@ class AgentStructuredOutputTest < Minitest::Test
     assert_includes result.error, "expected object"
   end
 
+  def test_parse_validates_symbol_type
+    so = Rixie::Agent::StructuredOutput.new(schema: {type: :string})
+    assert so.parse('"ok"').valid?
+
+    result = so.parse("1")
+    refute result.valid?
+    assert_includes result.error, "expected string"
+  end
+
+  def test_parse_recurses_into_symbol_typed_object_and_array
+    schema = {
+      type: :object,
+      properties: {tags: {type: :array, items: {type: :string}}},
+      required: [:tags]
+    }
+    so = Rixie::Agent::StructuredOutput.new(schema: schema)
+    assert so.parse('{"tags":["a"]}').valid?
+    assert_includes so.parse("{}").error, "tags"
+    assert_includes so.parse('{"tags":[1]}').error, "$.tags[0]"
+  end
+
   # --- enum ---
 
   def test_parse_accepts_value_in_enum

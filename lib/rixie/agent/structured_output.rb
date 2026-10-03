@@ -55,6 +55,9 @@ module Rixie
       # response and drive the corrective retry — not a general-purpose validator.
       def validate(value, schema, path)
         type = schema["type"] || schema[:type]
+        # Symbol types (`type: :string`) would otherwise fall through to the
+        # permissive `else` in `type_matches?` and skip validation entirely.
+        type = type.to_s if type.is_a?(Symbol)
         return type_error(type, value, path) unless type_matches?(type, value)
 
         enum = schema["enum"] || schema[:enum]

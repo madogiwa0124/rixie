@@ -107,6 +107,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Structured output validation now honors Symbol JSON Schema types (`type: :string`,
+  `type: :object`). `Rixie::Agent::StructuredOutput` previously treated them as unknown types and
+  accepted any value without recursing into `properties` / `items`.
 - `Strategy::PlanExecute` now produces the plan via **structured output** instead of a
   `plan_done` tool call. `Agent::Plan` runs with no tools and a JSON-schema-constrained
   response (`Agent::Plan::PLAN_SCHEMA`), so the plan comes back as a Hash. The old
