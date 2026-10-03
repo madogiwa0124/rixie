@@ -45,6 +45,31 @@ validates it against the schema. If it does not conform, the **finish generation
 a corrective message and the schema applied), without re-running any tool calls — so a web search
 never fires twice. After a bounded number of retries, `Rixie::SchemaValidationError` is raised.
 
+## Supported schema keywords
+
+Rixie's validator is intentionally minimal. It checks `type`, `enum`, `required`, `properties`,
+and array `items`; any other JSON Schema keyword is ignored during validation, although it is
+still sent to providers that support native structured output.
+
+`enum` restricts a value to a fixed set of choices and can appear in nested schemas, such as
+`items`, to constrain every element of an array:
+
+```ruby
+schema = {
+  "type" => "object",
+  "properties" => {
+    "tags" => {"type" => "array", "items" => {"type" => "string", "enum" => ["ruby", "rails", "llm"]}}
+  },
+  "required" => ["tags"]
+}
+```
+
+A value outside the `enum` fails validation. If any element is invalid, the entire answer is
+retried, and `Rixie::SchemaValidationError` is raised after the retry limit. When you only want to
+drop invalid choices, such as a hallucinated tag, filter the parsed result in your application
+instead of, or in addition to, using `enum`. Ruby Symbols in `enum` (`enum: [:ruby, :rails]`) are
+compared by their JSON string form.
+
 ## Provider support
 
 - **OpenAI** uses native structured output (`response_format: { type: "json_schema" }`).

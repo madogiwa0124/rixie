@@ -56,6 +56,53 @@ class AgentStructuredOutputTest < Minitest::Test
     assert_includes result.error, "expected object"
   end
 
+  # --- enum ---
+
+  def test_parse_accepts_value_in_enum
+    so = Rixie::Agent::StructuredOutput.new(schema: {"type" => "string", "enum" => ["a", "b"]})
+    assert so.parse('"a"').valid?
+  end
+
+  def test_parse_rejects_value_not_in_enum
+    so = Rixie::Agent::StructuredOutput.new(schema: {"type" => "string", "enum" => ["a", "b"]})
+    result = so.parse('"c"')
+    refute result.valid?
+    assert_includes result.error, "$"
+    assert_includes result.error, '"c"'
+    assert_includes result.error, "enum"
+  end
+
+  def test_parse_rejects_array_item_not_in_items_enum
+    schema = {
+      "type" => "object",
+      "properties" => {"tags" => {"type" => "array", "items" => {"type" => "string", "enum" => ["ruby", "rails"]}}}
+    }
+    so = Rixie::Agent::StructuredOutput.new(schema: schema)
+    assert so.parse('{"tags":["ruby","rails"]}').valid?
+
+    result = so.parse('{"tags":["ruby","python"]}')
+    refute result.valid?
+    assert_includes result.error, "$.tags[1]"
+  end
+
+  def test_parse_matches_symbol_enum_values_against_parsed_strings
+    so = Rixie::Agent::StructuredOutput.new(schema: {type: "string", enum: [:ruby, :rails]})
+    assert so.parse('"ruby"').valid?
+    refute so.parse('"python"').valid?
+  end
+
+  def test_parse_applies_enum_without_type
+    so = Rixie::Agent::StructuredOutput.new(schema: {"enum" => ["a", 1, nil]})
+    assert so.parse("1").valid?
+    assert so.parse("null").valid?
+    refute so.parse('"b"').valid?
+  end
+
+  def test_enum_error_does_not_list_allowed_values
+    so = Rixie::Agent::StructuredOutput.new(schema: {"type" => "string", "enum" => ["allowed_one"]})
+    refute_includes so.parse('"x"').error, "allowed_one"
+  end
+
   # --- correction_message ---
 
   def test_correction_message_includes_error_schema_and_previous_content

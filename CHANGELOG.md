@@ -85,6 +85,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** structured output now validates the JSON Schema `enum` keyword.
+  `Rixie::Agent::StructuredOutput` rejects a value outside the allowed choices, including nested
+  `items: { enum: [...] }`, and the corrective retry is triggered. Symbol enum values are compared
+  by their JSON string form. Previously `enum` was ignored, so an out-of-range value passed
+  validation silently; such answers now trigger the retry and can raise
+  `Rixie::SchemaValidationError`.
 - `Event::LlmCallStart` and `Event::LlmCallEnd` no longer carry `step_count`. The field
   was a redundant sequential counter — subscribers correlate the start/end pair by
   `envelope.run_id` (the two strictly alternate per run), and the envelope already exposes

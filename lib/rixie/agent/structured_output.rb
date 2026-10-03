@@ -50,12 +50,15 @@ module Rixie
 
       private
 
-      # Minimal recursive JSON Schema validation: `type`, `required`, `properties`,
-      # and array `items`. Sufficient to accept or reject a finish response and
-      # drive the corrective retry — not a general-purpose validator.
+      # Minimal recursive JSON Schema validation: `type`, `enum`, `required`,
+      # `properties`, and array `items`. Sufficient to accept or reject a finish
+      # response and drive the corrective retry — not a general-purpose validator.
       def validate(value, schema, path)
         type = schema["type"] || schema[:type]
         return type_error(type, value, path) unless type_matches?(type, value)
+
+        enum = schema["enum"] || schema[:enum]
+        return enum_error(value, path) if enum && !json_values(enum).include?(value)
 
         case type
         when "object" then validate_object(value, schema, path)
@@ -106,6 +109,20 @@ module Rixie
 
       def type_error(type, value, path)
         "#{path}: expected #{type}, got #{value.class}"
+      end
+
+      # Round-trips enum values through JSON so a Ruby-authored schema
+      # (e.g. `enum: [:ruby, :rails]`) compares equal to the parsed answer,
+      # whose values are always JSON types (String, never Symbol).
+      def json_values(enum)
+        JSON.parse(JSON.generate(enum))
+      end
+
+      # The allowed values are deliberately not listed: `correction_message`
+      # already embeds the full schema, and a large enum (e.g. hundreds of tag
+      # names) would otherwise be sent to the model twice.
+      def enum_error(value, path)
+        "#{path}: #{value.inspect} is not one of the allowed enum values"
       end
     end
   end
